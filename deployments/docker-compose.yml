@@ -1,0 +1,131 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  migrate-auth:
+    image: migrate/migrate:v4.17.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../migrations/auth:/migrations
+    entrypoint: [
+      "migrate",
+      "-path", "/migrations",
+      "-database", "postgres://postgres:postgres@postgres:5432/auth?sslmode=disable",
+      "up"
+    ]
+
+  hellod:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: hellod-run
+    environment:
+      HELLO_ADDR: ":50051"
+    ports:
+      - "50051:50051"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/grpc_health_probe", "-addr=localhost:50051"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+
+  gatewayd:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: gatewayd-run
+    environment:
+      GATEWAY_ADDR: ":8080"
+      GATEWAY_ADMIN_ADDR: ":8081"
+      HELLO_GRPC_ENDPOINT: "hellod:50051"
+      AUTH_GRPC_ENDPOINT: "authd:50052"
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    restart: unless-stopped
+    depends_on:
+      hellod:
+        condition: service_healthy
+      authd:
+        condition: service_healthy
+
+  authd:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: authd-run
+    environment:
+      AUTH_ADDR: ":50052"
+      AUTH_ADMIN_ADDR: ":8081"
+      AUTH_DB_DSN: "postgres://postgres:postgres@postgres:5432/auth?sslmode=disable"
+      AUTH_JWT_SECRET: "dev-secret-change-me"
+      AUTH_JWT_ISSUER: "sdk-microservices"
+    ports:
+      - "50052:50052"
+      - "8082:8081"
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate-auth:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "/grpc_health_probe", "-addr=localhost:50052"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+      
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=7d"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - gatewayd
+      - authd
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafanadata:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  promdata:
+  grafanadata:
