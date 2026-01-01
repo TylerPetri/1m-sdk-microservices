@@ -14,12 +14,12 @@ import (
 	hellov1 "sdk-microservices/gen/api/proto/hello/v1"
 	"sdk-microservices/internal/platform/admin"
 	"sdk-microservices/internal/platform/authctx"
+	"sdk-microservices/internal/platform/authjwt"
 	"sdk-microservices/internal/platform/config"
 	"sdk-microservices/internal/platform/health"
 	"sdk-microservices/internal/platform/httpmw"
 	"sdk-microservices/internal/platform/logging"
 	"sdk-microservices/internal/platform/otel"
-	"sdk-microservices/internal/services/auth/jwt"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"go.uber.org/zap"
@@ -83,9 +83,10 @@ func main() {
 	defer func() { _ = authConn.Close() }()
 
 	// Local JWT validator to avoid per-request RPC fanout to authd.
-	jwtSecret := config.Getenv("AUTH_JWT_SECRET", "dev-secret-change-me")
+	jwtSecret := []byte(config.Getenv("AUTH_JWT_SECRET", "dev-secret-change-me"))
 	jwtIssuer := config.Getenv("AUTH_JWT_ISSUER", "sdk-microservices")
-	jwtSvc := jwt.New(jwtSecret, jwtIssuer)
+	jwtTTLSeconds := int64(envInt("AUTH_JWT_TTL_SECONDS", 3600))
+	jwtSvc := authjwt.New(jwtSecret, jwtIssuer, jwtTTLSeconds)
 
 	// gRPC-Gateway mux. We forward request_id and user_id into downstream metadata.
 	mux := runtime.NewServeMux(
@@ -190,7 +191,7 @@ func main() {
 }
 
 // authSkipper enforces bearer auth everywhere except auth endpoints + health checks.
-func authSkipper(jwtSvc *jwt.Service, next http.Handler) http.Handler {
+func authSkipper(jwtSvc *authjwt.Service, next http.Handler) http.Handler {
 	protected := httpmw.AuthBearer(jwtSvc, next)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

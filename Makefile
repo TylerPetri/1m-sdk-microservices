@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: help tidy proto sqlc generate fmt fmt-check test up down logs verify
+.PHONY: help tidy proto sqlc generate fmt fmt-check test up down logs verify lint-migrations migrate-auth-smoke
 
 help:
 	@echo "Targets:"
@@ -12,6 +12,8 @@ help:
 	@echo "  fmt-check   - fail if gofmt would change files"
 	@echo "  test        - go test ./... -race"
 	@echo "  verify      - CI gate: fmt-check + generate + git diff --exit-code"
+	@echo "  lint-migrations     - fail if any down migrations exist (policy)"
+	@echo "  migrate-auth-smoke  - run auth migrations on a fresh DB and smoke query"
 	@echo "  up          - docker compose up (incl. Prometheus + Grafana)"
 	@echo "  down        - docker compose down -v"
 	@echo "  logs        - follow compose logs"
@@ -38,6 +40,12 @@ test:
 
 verify: fmt-check generate
 	git diff --exit-code
+
+lint-migrations:
+	./scripts/ci/lint-migrations.sh
+
+migrate-auth-smoke:
+	./scripts/ci/migrate-auth-smoke.sh
 
 up:
 	cd deployments && docker compose up -d --build
