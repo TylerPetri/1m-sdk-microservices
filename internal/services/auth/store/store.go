@@ -25,21 +25,38 @@ func New(db *pgxpool.Pool) *Store {
 
 func (s *Store) CreateUser(ctx context.Context, email, passwordHash string) (*User, error) {
 	var u User
-	s.DB.QueryRow(ctx, `
+	err := s.DB.QueryRow(ctx, `
 		INSERT INTO users (email, password_hash)
 		VALUES ($1, $2)
-		RETURNING id, email, password_hash, created_at, updated_at
-	`, email, passwordHash)
-
+		RETURNING id::text, email, password_hash, created_at, updated_at
+	`, email, passwordHash).Scan(
+		&u.ID,
+		&u.Email,
+		&u.PasswordHash,
+		&u.CreatedAt,
+		&u.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
 	return &u, nil
 }
 
 func (s *Store) GetUserByEmail(ctx context.Context, email string) (*User, error) {
 	var u User
-	s.DB.QueryRow(ctx, `
-		SELECT id, email, password_hash, created_at, updated_at
+	err := s.DB.QueryRow(ctx, `
+		SELECT id::text, email, password_hash, created_at, updated_at
 		FROM users
 		WHERE email = $1
-	`, email)
+	`, email).Scan(
+		&u.ID,
+		&u.Email,
+		&u.PasswordHash,
+		&u.CreatedAt,
+		&u.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
 	return &u, nil
 }

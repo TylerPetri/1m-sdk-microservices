@@ -1,0 +1,34 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify generated + formatting
+        run: |
+          make fmt-check
+          make lint-migrations
+          make generate
+          git diff --exit-code
+
+      - name: Unit tests
+        run: make test
+
+      - name: Migration smoke gate
+        run: make migrate-auth-smoke
+
+      - name: Integration tests (Docker)
+        run: make test-integration

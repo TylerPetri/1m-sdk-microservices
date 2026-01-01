@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: help tidy proto sqlc generate fmt fmt-check test up down logs verify lint-migrations migrate-auth-smoke
+.PHONY: help tidy proto sqlc generate fmt fmt-check test test-integration up down logs verify lint-migrations migrate-auth-smoke
 
 help:
 	@echo "Targets:"
@@ -11,6 +11,7 @@ help:
 	@echo "  fmt         - gofmt -w ./..."
 	@echo "  fmt-check   - fail if gofmt would change files"
 	@echo "  test        - go test ./... -race"
+	@echo "  test-integration - go test -tags=integration ./... (requires Docker)"
 	@echo "  verify      - CI gate: fmt-check + generate + git diff --exit-code"
 	@echo "  lint-migrations     - fail if any down migrations exist (policy)"
 	@echo "  migrate-auth-smoke  - run auth migrations on a fresh DB and smoke query"
@@ -37,6 +38,9 @@ fmt-check:
 
 test:
 	go test ./... -race
+
+test-integration:
+	go test -tags=integration ./...
 
 verify: fmt-check generate
 	git diff --exit-code
