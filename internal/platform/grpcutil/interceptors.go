@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"sdk-microservices/internal/platform/authctx"
 	"sdk-microservices/internal/platform/logging"
 	"sdk-microservices/internal/platform/metrics"
 
@@ -78,6 +79,14 @@ func requestLogUnary(base *zap.Logger) grpc.UnaryServerInterceptor {
 		if md, ok := metadata.FromIncomingContext(ctx); ok {
 			if rid := first(md, "x-request-id"); rid != "" {
 				lg = lg.With(zap.String("request_id", rid))
+			}
+			if uid := first(md, "x-user-id"); uid != "" {
+				lg = lg.With(zap.String("user_id", uid))
+				ctx = authctx.WithUserID(ctx, uid)
+			}
+			if uid := first(md, "x-user-id"); uid != "" {
+				lg = lg.With(zap.String("user_id", uid))
+				ctx = authctx.WithUserID(ctx, uid)
 			}
 			if ua := first(md, "user-agent"); ua != "" {
 				lg = lg.With(zap.String("user_agent", ua))

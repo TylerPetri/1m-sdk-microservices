@@ -23,6 +23,13 @@ type Result struct {
 	Deps     map[string]Result `json:"deps,omitempty"`
 }
 
+// Add appends a named dependency node to n and returns the created node.
+func (n *Node) Add(name string, check Check) *Node {
+	child := &Node{Name: name, Check: check}
+	n.Deps = append(n.Deps, child)
+	return child
+}
+
 func Evaluate(ctx context.Context, n *Node) Result {
 	start := time.Now()
 	res := Result{

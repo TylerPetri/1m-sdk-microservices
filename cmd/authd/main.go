@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -12,12 +13,12 @@ import (
 	authv1 "sdk-microservices/gen/api/proto/auth/v1"
 	"sdk-microservices/internal/db"
 	"sdk-microservices/internal/platform/admin"
+	"sdk-microservices/internal/platform/authjwt"
 	"sdk-microservices/internal/platform/config"
 	"sdk-microservices/internal/platform/grpcutil"
 	"sdk-microservices/internal/platform/health"
 	"sdk-microservices/internal/platform/logging"
 	"sdk-microservices/internal/platform/otel"
-	"sdk-microservices/internal/services/auth/jwt"
 	authsrv "sdk-microservices/internal/services/auth/server"
 	"sdk-microservices/internal/services/auth/store"
 
@@ -61,6 +62,8 @@ func main() {
 	dsn := config.Getenv("AUTH_DB_DSN", "postgres://postgres:postgres@localhost:5432/auth?sslmode=disable")
 	jwtSecret := config.Getenv("AUTH_JWT_SECRET", "dev-secret-change-me")
 	issuer := config.Getenv("AUTH_JWT_ISSUER", "sdk-microservices")
+	jwtTTLSeconds := config.Getenv("AUTH_JWT_TTL_SECONDS", "3600")
+	ttl, _ := strconv.ParseInt(jwtTTLSeconds, 10, 64)
 
 	dbConn, err := db.NewPool(ctx, dsn, db.Options{})
 	if err != nil {
@@ -69,7 +72,7 @@ func main() {
 	defer func() { dbConn.Close() }()
 
 	st := store.New(dbConn)
-	jwtSvc := jwt.New(jwtSecret, issuer)
+	jwtSvc := authjwt.New([]byte(jwtSecret), issuer, ttl)
 
 	srv := authsrv.New(log, st, jwtSvc, authsrv.Options{
 		AccessTTL:  15 * time.Minute,

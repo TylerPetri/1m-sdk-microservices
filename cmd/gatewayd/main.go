@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -12,65 +13,63 @@ import (
 	authv1 "sdk-microservices/gen/api/proto/auth/v1"
 	hellov1 "sdk-microservices/gen/api/proto/hello/v1"
 	"sdk-microservices/internal/platform/admin"
+	"sdk-microservices/internal/platform/authctx"
+	"sdk-microservices/internal/platform/authjwt"
+	"sdk-microservices/internal/platform/config"
 	"sdk-microservices/internal/platform/health"
 	"sdk-microservices/internal/platform/httpmw"
 	"sdk-microservices/internal/platform/logging"
-	"sdk-microservices/internal/platform/metrics"
 	"sdk-microservices/internal/platform/otel"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 )
 
 func main() {
-	log, err := logging.New("gateway")
-	if err != nil {
-		panic(err)
-	}
-	defer func() { _ = log.Sync() }()
-
 	ctx := context.Background()
+
+	log := zap.New(zapcore.NewCore(
+		zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
+		zapcore.AddSync(os.Stdout),
+		zapcore.InfoLevel,
+	)).With(zap.String("service", "gateway"))
+	defer func() { _ = log.Sync() }()
 
 	shutdownOTEL, err := otel.Init(ctx, "gateway")
 	if err != nil {
-		log.Fatal("otel init failed", zap.Error(err))
+		log.Fatal("otel init", zap.Error(err))
 	}
-	defer func() {
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer shutdownCancel()
-		_ = shutdownOTEL(shutdownCtx)
-	}()
+	defer func() { _ = shutdownOTEL(context.Background()) }()
 
-	// Metrics provider + /metrics handler (served on the admin port).
 	metricsH, shutdownMetrics, err := otel.InitMetricsPrometheus(ctx, "gateway")
 	if err != nil {
-		log.Fatal("metrics init failed", zap.Error(err))
+		log.Fatal("metrics init", zap.Error(err))
 	}
-	defer func() {
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer shutdownCancel()
-		_ = shutdownMetrics(shutdownCtx)
-	}()
+	defer func() { _ = shutdownMetrics(context.Background()) }()
 
-	httpm, err := metrics.NewHTTPServerMetrics("gateway")
-	if err != nil {
-		log.Fatal("http metrics init failed", zap.Error(err))
-	}
+	serving := atomic.Bool{}
+	serving.Store(true)
 
-	helloEndpoint := env("HELLO_GRPC_ENDPOINT", "localhost:50051")
-	authEndpoint := env("AUTH_GRPC_ENDPOINT", "localhost:50052")
+	// Readiness dependencies.
+	readyGraph := health.NewReadyGraph()
+	readyGraph.Add("otel", health.CheckAlwaysReady())
+	readyGraph.Add("metrics", health.CheckAlwaysReady())
+
+	helloEndpoint := config.Getenv("HELLO_GRPC_ADDR", "localhost:9091")
+	authEndpoint := config.Getenv("AUTH_GRPC_ADDR", "localhost:9092")
+
+	// Downstream gRPC dials.
+	dialCtx, dialCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer dialCancel()
 
 	dialOpts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
 	}
-
-	dialCtx, dialCancel := context.WithTimeout(ctx, 10*time.Second)
-	defer dialCancel()
-
 	helloConn, err := grpc.DialContext(dialCtx, helloEndpoint, dialOpts...)
 	if err != nil {
 		log.Fatal("dial hello", zap.Error(err))
@@ -83,9 +82,27 @@ func main() {
 	}
 	defer func() { _ = authConn.Close() }()
 
+	// Local JWT validator to avoid per-request RPC fanout to authd.
+	jwtSecret := []byte(config.Getenv("AUTH_JWT_SECRET", "dev-secret-change-me"))
+	jwtIssuer := config.Getenv("AUTH_JWT_ISSUER", "sdk-microservices")
+	jwtTTLSeconds := int64(envInt("AUTH_JWT_TTL_SECONDS", 3600))
+	jwtSvc := authjwt.New(jwtSecret, jwtIssuer, jwtTTLSeconds)
+
+	// gRPC-Gateway mux. We forward request_id and user_id into downstream metadata.
 	mux := runtime.NewServeMux(
+		runtime.WithMetadata(func(ctx context.Context, r *http.Request) metadata.MD {
+			md := metadata.MD{}
+			if rid := r.Header.Get("X-Request-Id"); rid != "" {
+				md.Set("x-request-id", rid)
+			}
+			if uid, ok := authctx.UserID(ctx); ok {
+				md.Set("x-user-id", uid)
+			}
+			return md
+		}),
 		runtime.WithErrorHandler(func(ctx context.Context, mux *runtime.ServeMux, marshaler runtime.Marshaler, w http.ResponseWriter, r *http.Request, err error) {
-			log.Error("gateway proxy error",
+			// Make proxy errors visible in logs with trace_id/span_id.
+			logging.WithTrace(ctx, log).Error("gateway proxy error",
 				zap.String("path", r.URL.Path),
 				zap.Error(err),
 			)
@@ -103,38 +120,46 @@ func main() {
 	root := http.NewServeMux()
 	root.Handle("/", mux)
 
-	// Useful for cheap liveness checks on the main listener (separate from /readyz on the admin port).
-	root.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+	// Cheap liveness on the main listener (admin has /livez too).
+	root.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
 
-	handler := httpmw.Wrap("gateway", log, root)
-	handler = httpm.Middleware(handler)
+	// Rate limiting: default 200 RPS / IP, burst 400 (tune per deployment).
+	rl := httpmw.NewIPLimiter(
+		rate.Limit(envFloat("GATEWAY_RATELIMIT_RPS", 200)),
+		envInt("GATEWAY_RATELIMIT_BURST", 400),
+		2*time.Minute,
+	)
+
+	// Compose the edge handler:
+	// - request id early (so logs + metadata always have it)
+	// - auth on all non-/v1/auth/* paths
+	// - rate limit (after auth so 401s still count; flip if you prefer)
+	// - security headers
+	// - OTel + access logs
+	h := httpmw.RequestID(root)
+	h = authSkipper(jwtSvc, h)
+	h = rl.Middleware(h)
+	h = httpmw.SecurityHeaders(h)
+	h = httpmw.Wrap("gateway", log, h)
 
 	srv := &http.Server{
-		Addr:              env("GATEWAY_ADDR", ":8080"),
-		Handler:           handler,
+		Addr:              config.Getenv("GATEWAY_HTTP_ADDR", ":8080"),
+		Handler:           h,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	var serving atomic.Bool
-	serving.Store(true)
-
-	readyGraph := &health.Node{
-		Name: "gateway",
-		Deps: []*health.Node{
-			{Name: "hello", Check: health.GRPCHealthCheck(helloConn, "")},
-			{Name: "auth", Check: health.GRPCHealthCheck(authConn, "")},
-		},
-	}
-
 	adminSrv, err := admin.Start(log, admin.Options{
-		Addr:        env("GATEWAY_ADMIN_ADDR", ":8081"),
+		Addr:        config.Getenv("GATEWAY_ADMIN_ADDR", ":8081"),
 		ServiceName: "gateway",
 		Metrics:     metricsH,
 		ReadyRoot:   readyGraph,
 		ServingFn:   serving.Load,
 	})
 	if err != nil {
-		log.Fatal("admin start failed", zap.Error(err))
+		log.Fatal("admin start", zap.Error(err))
 	}
 	defer func() {
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -156,24 +181,61 @@ func main() {
 	stop := make(chan os.Signal, 2)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
-	log.Info("shutting down gateway")
 
-	// Mark NOT_SERVING first, so /readyz flips quickly.
+	log.Info("shutting down gateway")
 	serving.Store(false)
 
-	// Drain HTTP requests.
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
 	_ = srv.Shutdown(shutdownCtx)
-
-	// Close downstream conns after HTTP drain.
-	_ = helloConn.Close()
-	_ = authConn.Close()
 }
 
-func env(k, d string) string {
-	if v := os.Getenv(k); v != "" {
-		return v
+// authSkipper enforces bearer auth everywhere except auth endpoints + health checks.
+func authSkipper(jwtSvc *authjwt.Service, next http.Handler) http.Handler {
+	protected := httpmw.AuthBearer(jwtSvc, next)
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/healthz":
+			next.ServeHTTP(w, r)
+			return
+		case stringsHasPrefix(r.URL.Path, "/v1/auth/"):
+			next.ServeHTTP(w, r)
+			return
+		default:
+			protected.ServeHTTP(w, r)
+			return
+		}
+	})
+}
+
+func stringsHasPrefix(s, prefix string) bool {
+	if len(prefix) > len(s) {
+		return false
 	}
-	return d
+	return s[:len(prefix)] == prefix
+}
+
+func envInt(k string, d int) int {
+	v := os.Getenv(k)
+	if v == "" {
+		return d
+	}
+	i, err := strconv.Atoi(v)
+	if err != nil {
+		return d
+	}
+	return i
+}
+
+func envFloat(k string, d float64) float64 {
+	v := os.Getenv(k)
+	if v == "" {
+		return d
+	}
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		return d
+	}
+	return f
 }
