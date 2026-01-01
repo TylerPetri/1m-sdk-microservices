@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -81,7 +82,10 @@ func main() {
 		log.Fatal("listen failed", zap.Error(err))
 	}
 
-	gs := grpc.NewServer(grpcutil.ServerOptionsWithName("auth", log)...)
+	gs := grpc.NewServer(grpcutil.ServerOptionsWithNameAndLimits("auth", log, grpcutil.Limits{
+		DefaultTimeout: envDuration("AUTH_RPC_TIMEOUT", 10*time.Second),
+		MaxInFlight:    envInt("AUTH_MAX_INFLIGHT", 2048),
+	})...)
 
 	hs := healthgrpc.NewServer()
 	healthpb.RegisterHealthServer(gs, hs)
@@ -147,4 +151,22 @@ func main() {
 	if err := gs.Serve(lis); err != nil {
 		log.Fatal("serve failed", zap.Error(err))
 	}
+}
+
+func envInt(k string, d int) int {
+	if v := os.Getenv(k); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return d
+}
+
+func envDuration(k string, d time.Duration) time.Duration {
+	if v := os.Getenv(k); v != "" {
+		if dur, err := time.ParseDuration(v); err == nil {
+			return dur
+		}
+	}
+	return d
 }

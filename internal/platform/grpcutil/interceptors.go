@@ -24,6 +24,20 @@ func ServerOptionsWith(log *zap.Logger) []grpc.ServerOption {
 
 // ServerOptionsWithName adds keepalives + OTel tracing/metrics + structured request logging.
 func ServerOptionsWithName(service string, log *zap.Logger) []grpc.ServerOption {
+	return ServerOptionsWithNameAndLimits(service, log, Limits{})
+}
+
+// Limits configures default timeouts + backpressure for gRPC servers.
+type Limits struct {
+	// DefaultTimeout is applied when the incoming context has no deadline.
+	DefaultTimeout time.Duration
+	// MaxInFlight bounds concurrent unary requests and streams.
+	MaxInFlight int
+}
+
+// ServerOptionsWithNameAndLimits adds keepalives + OTel tracing/metrics + structured request logging,
+// plus optional timeout/backpressure limits.
+func ServerOptionsWithNameAndLimits(service string, log *zap.Logger, lim Limits) []grpc.ServerOption {
 	opts := ServerOptions()
 
 	// OTel tracing instrumentation (newer contrib uses StatsHandler, not interceptors).
@@ -40,14 +54,24 @@ func ServerOptionsWithName(service string, log *zap.Logger) []grpc.ServerOption 
 		log.Warn("grpc metrics disabled (init failed)", zap.Error(err))
 	}
 
-	// Keep logging as interceptors (best place to measure duration + map status codes).
+	// Keep interceptors for limits + logging (best place to measure duration + map status codes).
 	var unary []grpc.UnaryServerInterceptor
+	// Apply backpressure/timeouts as early as possible.
+	if lim.MaxInFlight > 0 {
+		unary = append(unary, UnaryInFlightLimit(lim.MaxInFlight))
+	}
+	if lim.DefaultTimeout > 0 {
+		unary = append(unary, UnaryTimeout(lim.DefaultTimeout))
+	}
 	if mu != nil {
 		unary = append(unary, mu)
 	}
 	unary = append(unary, requestLogUnary(log))
 
 	var stream []grpc.StreamServerInterceptor
+	if lim.MaxInFlight > 0 {
+		stream = append(stream, StreamInFlightLimit(lim.MaxInFlight))
+	}
 	if ms != nil {
 		stream = append(stream, ms)
 	}
@@ -79,10 +103,6 @@ func requestLogUnary(base *zap.Logger) grpc.UnaryServerInterceptor {
 		if md, ok := metadata.FromIncomingContext(ctx); ok {
 			if rid := first(md, "x-request-id"); rid != "" {
 				lg = lg.With(zap.String("request_id", rid))
-			}
-			if uid := first(md, "x-user-id"); uid != "" {
-				lg = lg.With(zap.String("user_id", uid))
-				ctx = authctx.WithUserID(ctx, uid)
 			}
 			if uid := first(md, "x-user-id"); uid != "" {
 				lg = lg.With(zap.String("user_id", uid))

@@ -5,7 +5,10 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
+	"sync/atomic"
 	"syscall"
+	"time"
 
 	hellov1 "sdk-microservices/gen/api/proto/hello/v1"
 	"sdk-microservices/internal/platform/grpcutil"
@@ -40,7 +43,13 @@ func main() {
 		log.Fatal("listen failed", zap.Error(err))
 	}
 
-	gs := grpc.NewServer(grpcutil.ServerOptionsWithName("hello", log)...)
+	var serving atomic.Bool
+	serving.Store(true)
+
+	gs := grpc.NewServer(grpcutil.ServerOptionsWithNameAndLimits("hello", log, grpcutil.Limits{
+		DefaultTimeout: envDuration("HELLO_RPC_TIMEOUT", 10*time.Second),
+		MaxInFlight:    envInt("HELLO_MAX_INFLIGHT", 1024),
+	})...)
 	hs := health.NewServer()
 	healthpb.RegisterHealthServer(gs, hs)
 	hs.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
@@ -54,7 +63,21 @@ func main() {
 	go func() {
 		<-stop
 		log.Info("shutting down hello service")
-		gs.GracefulStop()
+
+		serving.Store(false)
+		hs.SetServingStatus("", healthpb.HealthCheckResponse_NOT_SERVING)
+
+		done := make(chan struct{})
+		go func() {
+			gs.GracefulStop()
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-time.After(10 * time.Second):
+			log.Warn("graceful stop timed out; forcing stop")
+			gs.Stop()
+		}
 	}()
 
 	if err := gs.Serve(lis); err != nil {
@@ -65,6 +88,24 @@ func main() {
 func env(k, d string) string {
 	if v := os.Getenv(k); v != "" {
 		return v
+	}
+	return d
+}
+
+func envInt(k string, d int) int {
+	if v := os.Getenv(k); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return d
+}
+
+func envDuration(k string, d time.Duration) time.Duration {
+	if v := os.Getenv(k); v != "" {
+		if dur, err := time.ParseDuration(v); err == nil {
+			return dur
+		}
 	}
 	return d
 }

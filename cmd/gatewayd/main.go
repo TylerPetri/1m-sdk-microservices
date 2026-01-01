@@ -140,6 +140,10 @@ func main() {
 	// - security headers
 	// - OTel + access logs
 	h := httpmw.RequestID(root)
+	// Fail-fast backpressure for bursts (tune per deployment).
+	h = httpmw.InFlightLimit(envInt("GATEWAY_MAX_INFLIGHT", 2048), h)
+	// Ensure outbound calls from the gateway (gRPC-Gateway -> downstream) always have a deadline.
+	h = httpmw.Timeout(envDuration("GATEWAY_REQUEST_TIMEOUT", 10*time.Second), h)
 	h = authSkipper(jwtSvc, h)
 	h = rl.Middleware(h)
 	h = httpmw.SecurityHeaders(h)
@@ -149,6 +153,10 @@ func main() {
 		Addr:              config.Getenv("GATEWAY_HTTP_ADDR", ":8080"),
 		Handler:           h,
 		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       envDuration("GATEWAY_READ_TIMEOUT", 15*time.Second),
+		WriteTimeout:      envDuration("GATEWAY_WRITE_TIMEOUT", 15*time.Second),
+		IdleTimeout:       envDuration("GATEWAY_IDLE_TIMEOUT", 60*time.Second),
+		MaxHeaderBytes:    1 << 20, // 1MiB
 	}
 
 	adminSrv, err := admin.Start(log, admin.Options{
@@ -226,6 +234,15 @@ func envInt(k string, d int) int {
 		return d
 	}
 	return i
+}
+
+func envDuration(k string, d time.Duration) time.Duration {
+	if v := os.Getenv(k); v != "" {
+		if dur, err := time.ParseDuration(v); err == nil {
+			return dur
+		}
+	}
+	return d
 }
 
 func envFloat(k string, d float64) float64 {
