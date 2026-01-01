@@ -5,12 +5,12 @@ import (
 	"strings"
 
 	"sdk-microservices/internal/platform/authctx"
-	"sdk-microservices/internal/platform/authjwt"
+	"sdk-microservices/internal/services/auth/jwt"
 )
 
 // AuthBearer validates an Authorization: Bearer <token> header and stores user id in context.
 // It does NOT enforce any specific audience; keep that in the JWT issuer/claims as needed.
-func AuthBearer(jwtSvc *authjwt.Service, next http.Handler) http.Handler {
+func AuthBearer(jwtSvc *jwt.Service, next http.Handler) http.Handler {
 	if jwtSvc == nil {
 		// If misconfigured, fail closed.
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -1,4 +1,4 @@
-package authjwt
+package jwt
 
 import (
 	"errors"
@@ -15,11 +15,10 @@ var (
 type Service struct {
 	secret []byte
 	issuer string
-	ttl    int64
 }
 
-func New(secret []byte, issuer string, ttl int64) *Service {
-	return &Service{secret: secret, issuer: issuer, ttl: ttl}
+func New(secret, issuer string) *Service {
+	return &Service{secret: []byte(secret), issuer: issuer}
 }
 
 type Claims struct {
