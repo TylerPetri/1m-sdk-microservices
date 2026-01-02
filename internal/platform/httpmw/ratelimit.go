@@ -82,3 +82,7 @@ func clientIP(r *http.Request) string {
 	}
 	return ""
 }
+
+func (l *IPLimiter) Wrap(next http.Handler) http.Handler {
+	return l.Middleware(next)
+}

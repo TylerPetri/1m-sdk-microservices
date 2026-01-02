@@ -75,3 +75,14 @@ down-prod:
 
 logs-prod:
 	cd deployments && docker compose --profile prod logs -f --tail=200
+
+
+# --- buf quality gates
+proto-lint:
+	buf lint
+
+proto-breaking:
+	# Compare against origin/main (CI should fetch full history).
+	buf breaking --against '.git#branch=origin/main'
+
+proto-check: proto-lint proto-breaking

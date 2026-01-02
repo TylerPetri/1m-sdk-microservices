@@ -1,14 +1,14 @@
 version: v1
 plugins:
   - plugin: go
-    out: gen
+    out: gen/api
     opt: paths=source_relative
 
   - plugin: go-grpc
-    out: gen
+    out: gen/api
     opt: paths=source_relative
 
   - plugin: grpc-gateway
-    out: gen
+    out: gen/api
     opt:
       - paths=source_relative
