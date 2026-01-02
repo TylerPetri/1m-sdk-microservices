@@ -1,0 +1,86 @@
+groups:
+  - name: sdkms.alerts.slo
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: page
+        annotations:
+          summary: "Service down: {{ $labels.job }}"
+          description: "Prometheus cannot scrape {{ $labels.job }} for >1m."
+
+      - alert: HighHTTPErrorRate
+        expr: |
+          (
+            sum by (job) (rate(http_server_requests_total{http_status_code=~"5.."}[5m]))
+            /
+            sum by (job) (rate(http_server_requests_total[5m]))
+          ) > 0.02
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: "High HTTP 5xx rate ({{ $labels.job }})"
+          description: "HTTP 5xx rate >2% for 5m."
+
+      - alert: HighGRPCErrorRate
+        expr: |
+          (
+            sum by (job) (rate(grpc_server_requests_total{rpc_grpc_status_code!~"OK|0"}[5m]))
+            /
+            sum by (job) (rate(grpc_server_requests_total[5m]))
+          ) > 0.02
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: "High gRPC error rate ({{ $labels.job }})"
+          description: "gRPC non-OK rate >2% for 5m."
+
+      - alert: HighGatewayHTTPp99
+        expr: job:http_server_request_duration_seconds:p99{job="gateway"} > 1.0
+        for: 10m
+        labels:
+          severity: page
+        annotations:
+          summary: "Gateway HTTP p99 too high"
+          description: "Gateway HTTP p99 > 1s for 10m."
+
+      - alert: HighGRPCp99
+        expr: job:grpc_server_request_duration_seconds:p99 > 1.0
+        for: 10m
+        labels:
+          severity: page
+        annotations:
+          summary: "gRPC p99 too high ({{ $labels.job }})"
+          description: "gRPC p99 > 1s for 10m."
+
+  - name: sdkms.alerts.saturation
+    rules:
+      - alert: HighGoroutines
+        expr: go_goroutines > 5000
+        for: 10m
+        labels:
+          severity: ticket
+        annotations:
+          summary: "High goroutine count ({{ $labels.job }})"
+          description: "go_goroutines > 5000 for 10m. Indicates leak or overload."
+
+      - alert: ProcessRestarted
+        expr: changes(process_start_time_seconds[10m]) > 0
+        for: 0m
+        labels:
+          severity: ticket
+        annotations:
+          summary: "Process restarted ({{ $labels.job }})"
+          description: "process_start_time_seconds changed within 10m."
+
+      - alert: HighMemoryUsage
+        expr: process_resident_memory_bytes > 2e9
+        for: 10m
+        labels:
+          severity: ticket
+        annotations:
+          summary: "High memory usage ({{ $labels.job }})"
+          description: "RSS > 2GB for 10m."

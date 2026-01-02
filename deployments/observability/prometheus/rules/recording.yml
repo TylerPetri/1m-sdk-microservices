@@ -1,0 +1,24 @@
+groups:
+  - name: sdkms.recording.latency
+    interval: 30s
+    rules:
+      # HTTP latency (gateway) by route
+      - record: job:http_server_request_duration_seconds:p95
+        expr: histogram_quantile(0.95, sum by (job, le, http_route) (rate(http_server_request_duration_bucket[5m])))
+      - record: job:http_server_request_duration_seconds:p99
+        expr: histogram_quantile(0.99, sum by (job, le, http_route) (rate(http_server_request_duration_bucket[5m])))
+
+      # gRPC latency by service/method
+      - record: job:grpc_server_request_duration_seconds:p95
+        expr: histogram_quantile(0.95, sum by (job, le, rpc_service, rpc_method) (rate(grpc_server_request_duration_bucket[5m])))
+      - record: job:grpc_server_request_duration_seconds:p99
+        expr: histogram_quantile(0.99, sum by (job, le, rpc_service, rpc_method) (rate(grpc_server_request_duration_bucket[5m])))
+
+  - name: sdkms.recording.errors
+    interval: 30s
+    rules:
+      # Error rates (best-effort; depends on instrumentation labels)
+      - record: job:http_server_requests:rate5m
+        expr: sum by (job, http_route, http_status_code) (rate(http_server_requests_total[5m]))
+      - record: job:grpc_server_requests:rate5m
+        expr: sum by (job, rpc_service, rpc_method, rpc_grpc_status_code) (rate(grpc_server_requests_total[5m]))

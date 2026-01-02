@@ -1,3 +1,5 @@
+name: sdk-microservices
+
 services:
   postgres:
     image: postgres:16
@@ -15,59 +17,9 @@ services:
       timeout: 3s
       retries: 20
 
-  migrate-auth:
-    image: migrate/migrate:v4.17.1
-    depends_on:
-      postgres:
-        condition: service_healthy
-    volumes:
-      - ../migrations/auth:/migrations
-    entrypoint: [
-      "migrate",
-      "-path", "/migrations",
-      "-database", "postgres://postgres:postgres@postgres:5432/auth?sslmode=disable",
-      "up"
-    ]
-
-  hellod:
-    build:
-      context: ..
-      dockerfile: Dockerfile
-      target: hellod-run
-    environment:
-      HELLO_ADDR: ":50051"
-    ports:
-      - "50051:50051"
-    depends_on:
-      - postgres
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "/grpc_health_probe", "-addr=localhost:50051"]
-      interval: 3s
-      timeout: 2s
-      retries: 20
-
-  gatewayd:
-    build:
-      context: ..
-      dockerfile: Dockerfile
-      target: gatewayd-run
-    environment:
-      GATEWAY_ADDR: ":8080"
-      GATEWAY_ADMIN_ADDR: ":8081"
-      HELLO_GRPC_ENDPOINT: "hellod:50051"
-      AUTH_GRPC_ENDPOINT: "authd:50052"
-    ports:
-      - "8080:8080"
-      - "8081:8081"
-    restart: unless-stopped
-    depends_on:
-      hellod:
-        condition: service_healthy
-      authd:
-        condition: service_healthy
-
+  # --- core services (prod profile)
   authd:
+    profiles: ["prod"]
     build:
       context: ..
       dockerfile: Dockerfile
@@ -78,43 +30,91 @@ services:
       AUTH_DB_DSN: "postgres://postgres:postgres@postgres:5432/auth?sslmode=disable"
       AUTH_JWT_SECRET: "dev-secret-change-me"
       AUTH_JWT_ISSUER: "sdk-microservices"
-    ports:
-      - "50052:50052"
-      - "8082:8081"
-    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
-      migrate-auth:
-        condition: service_completed_successfully
+    ports:
+      - "50052:50052"
+      - "8083:8081"
     healthcheck:
-      test: ["CMD", "/grpc_health_probe", "-addr=localhost:50052"]
-      interval: 3s
-      timeout: 2s
+      test: ["CMD", "/grpc_health_probe", "-addr=:50052"]
+      interval: 5s
+      timeout: 3s
       retries: 20
-      
+    restart: unless-stopped
+
+  hellod:
+    profiles: ["prod"]
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: hellod-run
+    environment:
+      HELLO_ADDR: ":50051"
+      HELLO_ADMIN_ADDR: ":8081"
+      HELLO_RPC_TIMEOUT: "10s"
+      HELLO_MAX_INFLIGHT: "256"
+    ports:
+      - "50051:50051"
+      - "8082:8081"
+    healthcheck:
+      test: ["CMD", "/grpc_health_probe", "-addr=:50051"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  gatewayd:
+    profiles: ["prod"]
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: gatewayd-run
+    environment:
+      GATEWAY_HTTP_ADDR: ":8080"
+      GATEWAY_ADMIN_ADDR: ":8081"
+      HELLO_GRPC_ADDR: "hellod:50051"
+      AUTH_GRPC_ADDR: "authd:50052"
+      AUTH_JWT_SECRET: "dev-secret-change-me"
+      AUTH_JWT_ISSUER: "sdk-microservices"
+    depends_on:
+      hellod:
+        condition: service_healthy
+      authd:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    restart: unless-stopped
+
+  # --- observability (prod profile)
   prometheus:
+    profiles: ["prod"]
     image: prom/prometheus:v2.55.1
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
-      - "--storage.tsdb.retention.time=7d"
+      - "--web.enable-lifecycle"
     volumes:
-      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - promdata:/prometheus
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/rules:/etc/prometheus/rules:ro
     ports:
       - "9090:9090"
     depends_on:
       - gatewayd
       - authd
+      - hellod
     restart: unless-stopped
 
   grafana:
-    image: grafana/grafana:11.3.0
+    profiles: ["prod"]
+    image: grafana/grafana:11.2.2
     environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
-      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+      GF_USERS_DEFAULT_THEME: "dark"
+      GF_SERVER_HTTP_PORT: "3000"
     volumes:
       - grafanadata:/var/lib/grafana
       - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
@@ -125,7 +125,44 @@ services:
       - prometheus
     restart: unless-stopped
 
+  # --- optional: logs (Loki) (logs profile)
+  loki:
+    profiles: ["logs"]
+    image: grafana/loki:3.1.1
+    command: ["-config.file=/etc/loki/loki.yml"]
+    volumes:
+      - ./observability/loki/loki.yml:/etc/loki/loki.yml:ro
+      - lokidata:/loki
+    ports:
+      - "3100:3100"
+    restart: unless-stopped
+
+  promtail:
+    profiles: ["logs"]
+    image: grafana/promtail:3.1.1
+    command: ["-config.file=/etc/promtail/promtail.yml"]
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./observability/loki/promtail.yml:/etc/promtail/promtail.yml:ro
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+  # --- optional: OTEL collector (otel profile)
+  otel-collector:
+    profiles: ["otel"]
+    image: otel/opentelemetry-collector-contrib:0.110.0
+    command: ["--config=/etc/otelcol/config.yml"]
+    volumes:
+      - ./observability/otel-collector/config.yml:/etc/otelcol/config.yml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    restart: unless-stopped
+
 volumes:
   pgdata:
   promdata:
   grafanadata:
+  lokidata:
