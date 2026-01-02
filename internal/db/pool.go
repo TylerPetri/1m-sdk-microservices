@@ -77,14 +77,51 @@ func NewPool(ctx context.Context, dsn string, opts Options) (*pgxpool.Pool, erro
 		return nil, fmt.Errorf("db: create pool: %w", err)
 	}
 
-	// Fail fast on bad DSN / network / auth with a short ping timeout.
-	pingCtx, cancel := context.WithTimeout(ctx, opts.InitialPingTimeout)
-	defer cancel()
+	    // Initial ping: keeps "fail fast" behavior on bad DSN/auth, but also
+    // tolerates slow container/compose startups by retrying until the timeout.
+    // opts.InitialPingTimeout is treated as a *total* budget.
+    if opts.InitialPingTimeout <= 0 {
+        opts.InitialPingTimeout = 2 * time.Second
+    }
 
-	if err := pool.Ping(pingCtx); err != nil {
-		pool.Close()
-		return nil, fmt.Errorf("db: initial ping: %w", err)
-	}
+    deadline := time.Now().Add(opts.InitialPingTimeout)
+    // Short per-attempt timeout (so we can retry quickly).
+    const attemptTimeout = 2 * time.Second
+    backoff := 50 * time.Millisecond
 
-	return pool, nil
+    var lastErr error
+    for {
+        if ctx.Err() != nil {
+            lastErr = ctx.Err()
+            break
+        }
+        remaining := time.Until(deadline)
+        if remaining <= 0 {
+            break
+        }
+
+        perAttempt := attemptTimeout
+        if remaining < perAttempt {
+            perAttempt = remaining
+        }
+
+        pingCtx, cancel := context.WithTimeout(ctx, perAttempt)
+        err := pool.Ping(pingCtx)
+        cancel()
+
+        if err == nil {
+            return pool, nil
+        }
+        lastErr = err
+
+        // Sleep with capped exponential backoff.
+        if backoff > time.Second {
+            backoff = time.Second
+        }
+        time.Sleep(backoff)
+        backoff *= 2
+    }
+
+    pool.Close()
+    return nil, fmt.Errorf("db: initial ping: %w", lastErr)
 }
