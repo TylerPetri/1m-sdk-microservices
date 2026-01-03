@@ -2,6 +2,8 @@
 
 A production-style Go microservices starter: gRPC services behind an HTTP gateway (grpc-gateway), Postgres-backed auth, and a shared “platform” layer for boot/health/metrics/logging/OTel.
 
+> This repository represents an evolving production-grade system and is not intended as a reusable template.
+
 ## Why this repo exists
 
 This is a **clean, team-ready** baseline that demonstrates how I build services that scale operationally:
@@ -27,8 +29,6 @@ make generate   # buf + sqlc
 make test       # unit tests (race)
 make up-prod    # starts postgres + services + observability stack (profile-based)
 ```
-
-> This repository represents an evolving production-grade system and is not intended as a reusable template.
 
 ---
 
