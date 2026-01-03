@@ -26,3 +26,17 @@ Prereqs: Go + Docker
 make generate   # buf + sqlc
 make test       # unit tests (race)
 make up-prod    # starts postgres + services + observability stack (profile-based)
+```
+
+> This repository represents an evolving production-grade system and is not intended as a reusable template.
+
+---
+
+## License
+
+© 2026 Tyler Petri. All rights reserved.
+
+This repository and its contents are proprietary and confidential.  
+No permission is granted to use, copy, modify, merge, publish, distribute, sublicense, or sell any part of this software without explicit written permission from the author.
+
+This project is shared publicly for evaluation, discussion, and demonstration purposes only.
