@@ -1,13 +1,28 @@
 # sdk-microservices (Go)
 
-- gRPC microservices
-- HTTP gateway via grpc-gateway
-- Postgres
-- Migrations via migrate
-- Protos via Buf
+A production-style Go microservices starter: gRPC services behind an HTTP gateway (grpc-gateway), Postgres-backed auth, and a shared “platform” layer for boot/health/metrics/logging/OTel.
 
-## Quickstart
+## Why this repo exists
 
-1) Install proto tools (once):
+This is a **clean, team-ready** baseline that demonstrates how I build services that scale operationally:
+- **Consistent service boot pattern** (logging, config, shutdown, health/readiness, admin server)
+- **API-first boundaries** with **Protobuf + Buf** and generated gRPC + HTTP (grpc-gateway)
+- **Typed data access** with **pgxpool + sqlc**
+- **Operational maturity**: `/livez`, `/readyz`, `/metrics`, tracing hooks, and Docker Compose for local prod-like runs
+- **Deterministic generation + CI gates** (no “it works on my machine” drift)
+
+## Architecture (at a glance)
+
+- **gatewayd** (HTTP) → routes `/v1/*` → calls gRPC services
+- **authd** (gRPC) → register/login/validate backed by Postgres
+- **hellod** (gRPC) → simple example service
+- **admin ports** per service expose health + metrics
+
+## Quick run (local)
+
+Prereqs: Go + Docker
+
 ```bash
-make tools
+make generate   # buf + sqlc
+make test       # unit tests (race)
+make up-prod    # starts postgres + services + observability stack (profile-based)
