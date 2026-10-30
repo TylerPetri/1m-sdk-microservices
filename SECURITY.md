@@ -17,6 +17,10 @@ token, identity, or key values in this report:
   This is evidence of a development-issued example token, not just arbitrary
   placeholder text. A JWT is not itself an HMAC signing key; however, the matching
   key was also published as a configuration default.
+- **Not established:** that the token was strictly synthetic or never used in a
+  deployed service. Signature verification establishes the matching key, not the
+  issuance path or the absence of external reuse. That requires owner confirmation
+  and historical configuration/deployment records.
 - The original reachable history has one commit. Its key references are the auth
   configuration and local Compose file. No real deployment manifests or external
   credential bindings were found. The old profile was called `prod`, did not set

@@ -7,7 +7,7 @@ shutdown, health checks, configuration, logging, metrics, and tracing hooks.
 
 This demonstrates service composition, generated API/data boundaries, and local
 operational tooling. It is experimental software, with no production reliability
-or scalability claim. See [the Pass 2 review](PASS2_REVIEW.md) for
+or scalability claim. See [the final review](FINAL_REVIEW.md) for
 verified checks and unresolved risks, and [DESIGN.md](DESIGN.md) for design intent.
 
 ## Architecture
@@ -31,8 +31,8 @@ Admin listeners expose `/livez`, `/readyz`, and `/metrics` separately from APIs.
 
 ## Local quickstart
 
-Requires Docker Engine with Compose v2, Go matching `go.mod` or newer, Bash,
-Make, curl, jq, and openssl. Checked-in generated code supports builds without
+Requires Docker Engine with Compose v2.24.4 or newer, Go 1.24.9 (the CI
+toolchain), Bash, Make, curl, jq, openssl, and Python 3 for `make smoke-compose`. Checked-in generated code supports builds without
 installing generators.
 
 ```bash
@@ -117,4 +117,5 @@ Copyright © 2026 Tyler Petri. All rights reserved; see [LICENSE.txt](LICENSE.tx
 Public visibility does not grant an open-source license. The existing license
 restricts use and distribution and calls the work confidential. Owner review of
 those terms and ownership is required before a publication GO; this preparation
-does not change licensing rights.
+does not change licensing rights. Dependency and container obligations are
+reviewed separately in [THIRD_PARTY_REVIEW.md](THIRD_PARTY_REVIEW.md).

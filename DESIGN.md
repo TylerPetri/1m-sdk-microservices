@@ -43,7 +43,8 @@ All services:
 - Optionally expose an **HTTP surface** via `grpc-gateway`
 - Expose an **admin port** for health and metrics
 
-There is no shared “god service” and no global runtime state.
+Service processes share no application runtime state; each initializes its own
+logging and telemetry providers.
 
 ---
 
