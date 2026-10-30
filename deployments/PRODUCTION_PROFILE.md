@@ -58,3 +58,19 @@ These are intentionally minimal and safe to evolve.
 Auth waits for the one-shot migration service to complete. `make down-prod` removes
 local volumes and all their data. Existing database volumes retain their initial
 credentials; changing environment variables does not rotate existing users.
+
+## Reproducible smoke verification
+
+From the repository root, `make smoke-compose` builds all three actual Dockerfile
+runtime targets and creates a uniquely named disposable stack with random
+loopback ports. It exercises auth/Hello, readiness, Prometheus scraping and rule
+tests, Grafana provisioning, OTLP metric delivery, and Promtail-to-Loki logs.
+It removes only its own containers, network, and volumes on exit. Logs are saved
+under a temporary directory (or `SDK_SMOKE_LOG_DIR`). It does not reuse an
+existing database or deployment.
+
+Grafana's overview uses the emitted application metric names; HTTP grouping is
+by method rather than route. Recording/error-rate rules have synthetic promtool
+checks. Alert thresholds remain illustrative and need workload-specific tuning.
+Promtail is scoped by the Compose project label, but its Docker socket access is
+still suitable only for a trusted local development host.

@@ -71,14 +71,17 @@ and [migration policy](MIGRATIONS.md).
 
 ```bash
 export PATH="$(go env GOPATH)/bin:$PATH"
-make tools                 # pinned Buf, sqlc, and protoc plugins; needs network
+make tools                 # pinned generators and staticcheck; needs network
 make fmt-check
 make lint-migrations
 make proto-check           # compares with fetched origin/main
 make generate              # regenerate Protobuf and SQL query code
 make verify                # formatting + generation + tracked diff check
+go vet ./...
+staticcheck ./...
+staticcheck -tags integration ./...
 make test                  # unit tests with race detector
-make test-integration      # disposable Postgres via testcontainers; needs Docker
+make test-integration      # disposable Postgres via testcontainers + race detector
 make migrate-auth-smoke    # real migrate CLI + negative SQL/dirty-state tests
 make smoke-compose         # actual Dockerfile builds + disposable full stack; needs Docker
 ```

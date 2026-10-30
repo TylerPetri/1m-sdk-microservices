@@ -101,7 +101,7 @@ Generated code is treated as a **checked-in artifact** and verified by CI to pre
 
 - Configuration is environment-based
 - Local-only defaults are present; a historical demo token remains in Git history (see PUBLICATION_REVIEW.md)
-- Defaults exist for local development only
+- Local database defaults exist for development only; JWT signing keys must be explicitly supplied in every environment. Staging/prod require an explicit database DSN.
 
 This mirrors typical containerized production environments.
 
