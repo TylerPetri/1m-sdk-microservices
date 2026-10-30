@@ -172,6 +172,7 @@ func startPostgres(t *testing.T, ctx context.Context) *postgres.PostgresContaine
 		postgres.WithDatabase("auth"),
 		postgres.WithUsername("postgres"),
 		postgres.WithPassword("postgres"),
+		postgres.BasicWaitStrategies(),
 	)
 	if err != nil {
 		t.Fatalf("start postgres err=%v", err)
