@@ -154,7 +154,9 @@ services:
   promtail:
     profiles: ["logs"]
     image: grafana/promtail:3.1.1
-    command: ["-config.file=/etc/promtail/promtail.yml"]
+    command: ["-config.file=/etc/promtail/promtail.yml", "-config.expand-env=true"]
+    environment:
+      DOCKER_LOG_PROJECT: "${COMPOSE_PROJECT_NAME:-sdk-microservices}"
     volumes:
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro

@@ -33,7 +33,7 @@ type Config struct {
 	} `envPrefix:""`
 
 	JWT struct {
-		Secret string `env:"AUTH_JWT_SECRET" default:"dev-secret-change-me" required_in:"staging,prod" redact:"true"`
+		Secret string `env:"AUTH_JWT_SECRET" required:"true" redact:"true"`
 		Issuer string `env:"AUTH_JWT_ISSUER" default:"sdk-microservices"`
 	} `envPrefix:""`
 
@@ -67,7 +67,7 @@ type DBPoolConfig struct {
 }
 
 type JWTConfig struct {
-	Secret string `env:"AUTH_JWT_SECRET" default:"dev-secret-change-me" required_in:"staging,prod" redact:"true"`
+	Secret string `env:"AUTH_JWT_SECRET" required:"true" redact:"true"`
 	Issuer string `env:"AUTH_JWT_ISSUER" default:"sdk-microservices"`
 }
 
@@ -77,7 +77,7 @@ type TokenConfig struct {
 }
 
 func (c Config) Validate() error {
-	appEnv, err := config.AuthenticateAppEnv(c.Platform.Env.AppEnv)
+	_, err := config.AuthenticateAppEnv(c.Platform.Env.AppEnv)
 	if err != nil {
 		return err
 	}
@@ -126,13 +126,8 @@ func (c Config) Validate() error {
 	if strings.TrimSpace(c.JWT.Secret) == "" {
 		return fmt.Errorf("AUTH_JWT_SECRET must not be empty")
 	}
-	if string(appEnv) == "staging" || string(appEnv) == "prod" {
-		if len(c.JWT.Secret) < 32 {
-			return fmt.Errorf("AUTH_JWT_SECRET must be at least 32 characters in staging/prod")
-		}
-		if c.JWT.Secret == "dev-secret-change-me" {
-			return fmt.Errorf("AUTH_JWT_SECRET must be set to a non-default value in staging/prod")
-		}
+	if len(strings.TrimSpace(c.JWT.Secret)) < 32 {
+		return fmt.Errorf("AUTH_JWT_SECRET must be at least 32 characters in every environment")
 	}
 
 	// Tokens

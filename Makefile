@@ -1,6 +1,7 @@
 SHELL := /bin/bash
 PROTO_BASE ?= origin/main
 
+
 .PHONY: help tidy proto sqlc generate fmt fmt-check test test-integration verify lint-migrations migrate-auth-smoke up down logs up-prod down-prod logs-prod tools proto-lint proto-breaking proto-check
 
 help:
@@ -91,3 +92,7 @@ proto-breaking:
 	buf breaking --against '.git#ref=$(PROTO_BASE)'
 
 proto-check: proto-lint proto-breaking
+
+.PHONY: smoke-compose
+smoke-compose:
+	bash scripts/ci/compose-smoke.sh

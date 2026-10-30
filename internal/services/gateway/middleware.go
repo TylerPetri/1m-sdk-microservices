@@ -5,7 +5,6 @@ import (
 
 	"sdk-microservices/internal/platform/authjwt"
 	"sdk-microservices/internal/platform/httpmw"
-	"strings"
 
 	"go.uber.org/zap"
 	"golang.org/x/time/rate"
@@ -21,7 +20,7 @@ func BuildEdgeMiddleware(log *zap.Logger, cfg Config, root http.Handler) http.Ha
 
 	protected := httpmw.AuthBearer(authjwt.New([]byte(cfg.JWT.Secret), cfg.JWT.Issuer, 0), root)
 	authenticated := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/v1/auth/") || r.URL.Path == "/healthz" || r.URL.Path == "/readyz" {
+		if publicRoute(r.URL.Path) {
 			root.ServeHTTP(w, r)
 			return
 		}
@@ -51,4 +50,14 @@ func BuildEdgeMiddleware(log *zap.Logger, cfg Config, root http.Handler) http.Ha
 			),
 		),
 	)
+}
+
+// Enumerate the public API instead of exempting every future auth-prefixed route.
+func publicRoute(path string) bool {
+	switch path {
+	case "/v1/auth/register", "/v1/auth/login", "/v1/auth/validate", "/healthz", "/readyz":
+		return true
+	default:
+		return false
+	}
 }

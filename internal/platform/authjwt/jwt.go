@@ -3,6 +3,7 @@ package authjwt
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	jwt "github.com/golang-jwt/jwt/v5"
@@ -75,6 +76,9 @@ func (s *Service) NewRefreshToken(userID, email string, ttl time.Duration) (stri
 }
 
 func (s *Service) Parse(token string) (*Claims, error) {
+	if len(s.secret) == 0 || strings.TrimSpace(s.issuer) == "" {
+		return nil, ErrInvalidToken
+	}
 	parsed, err := jwt.ParseWithClaims(token, &Claims{}, func(t *jwt.Token) (any, error) {
 		if t.Method != jwt.SigningMethodHS256 {
 			return nil, ErrInvalidToken
@@ -89,7 +93,7 @@ func (s *Service) Parse(token string) (*Claims, error) {
 	if !ok || !parsed.Valid {
 		return nil, ErrInvalidToken
 	}
-	if claims.Issuer != s.issuer || claims.Subject == "" || claims.ID == "refresh" {
+	if claims.Issuer != s.issuer || strings.TrimSpace(claims.Subject) == "" || claims.ID == "refresh" {
 		return nil, ErrInvalidToken
 	}
 	return claims, nil
