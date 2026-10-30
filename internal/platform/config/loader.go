@@ -27,7 +27,7 @@ func CurrentEnv() AppEnv {
 	case EnvDev, EnvStaging, EnvProd:
 		return AppEnv(v)
 	default:
-		// Unknown env -> treat as dev but validation should catch it if struct includes APP_ENV.
+		// Preserve unknown values so service validation rejects them.
 		return AppEnv(v)
 	}
 }

@@ -25,8 +25,8 @@ flowchart LR
     Grafana --> Prometheus
 ```
 
-The gateway validates access JWTs on protected routes. `/v1/auth/*` and health
-routes are public. Internal gRPC transport is plaintext in this local setup.
+The gateway validates access JWTs on protected routes. Register, login, Validate,
+and health routes are public. See [the authentication contract](SECURITY.md#http-authentication-contract). Internal gRPC transport is plaintext in this local setup.
 Admin listeners expose `/livez`, `/readyz`, and `/metrics` separately from APIs.
 
 ## Local quickstart
@@ -79,7 +79,8 @@ make generate              # regenerate Protobuf and SQL query code
 make verify                # formatting + generation + tracked diff check
 make test                  # unit tests with race detector
 make test-integration      # disposable Postgres via testcontainers; needs Docker
-make migrate-auth-smoke    # real migrate CLI on a fresh database; needs Docker
+make migrate-auth-smoke    # real migrate CLI + negative SQL/dirty-state tests
+make smoke-compose         # actual Dockerfile builds + disposable full stack; needs Docker
 ```
 
 `make fmt` formats tracked Go files. New Go files must be added to Git first.
@@ -93,14 +94,19 @@ Generation requires access to the locked Google APIs dependency on buf.build.
 - Authentication is a demonstration: refresh tokens are issued, but refresh,
   rotation, logout, and revocation endpoints are not implemented. Refresh tokens
   are rejected where access tokens are expected.
-- Integration tests construct their own HTTP/gRPC servers and do not exercise
-  the entire command startup/middleware stack; gateway unit tests cover token
-  rejection separately. Compose smoke checks remain necessary.
+- Integration tests construct HTTP/gRPC servers with the real edge middleware.
+  `make smoke-compose` additionally exercises command startup, actual container
+  images, Prometheus scraping, Grafana provisioning, OTLP metrics, and Loki logs.
 - No TLS termination, service identity, production secret manager, deployment
   automation, backup/restore validation, load testing, or production SLO evidence.
 - Observability profiles, dashboards, alerts, and OTel configuration are examples;
-  they require separate validation and tuning. Logs profile mounts the Docker
-  socket and container logs. Empty dashboard placeholders are not dashboards.
+  startup smoke coverage does not prove alert accuracy, SLOs, or performance.
+  The logs profile mounts the Docker socket and reads this Compose project’s logs.
+
+For source-based runs, export the same randomly generated `AUTH_JWT_SECRET` to
+both authd and gatewayd; there is no signing-key fallback, even in dev. Staging
+and prod also require an explicit `AUTH_DB_DSN`. See [SECURITY.md](SECURITY.md) for
+historical-key rotation actions and the trust boundary of direct gRPC access.
 
 ## License
 

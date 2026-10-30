@@ -37,6 +37,11 @@ jobs:
           make proto-check PROTO_BASE="$base"
           make verify
 
+      - name: Static analysis
+        run: |
+          go vet ./...
+          staticcheck ./...
+
       - name: Unit tests
         run: make test
 

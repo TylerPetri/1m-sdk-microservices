@@ -112,9 +112,12 @@ func Run(ctx context.Context, opts Options, build func(ctx context.Context, deps
 		if adminEnv == "" {
 			adminEnv = upperServiceEnvPrefix(opts.ServiceName) + "_ADMIN_ADDR"
 		}
-		adminAddr = ":8081"
-		if opts.AdminAddrFallback != "" {
+		adminAddr = os.Getenv(adminEnv)
+		if adminAddr == "" {
 			adminAddr = opts.AdminAddrFallback
+		}
+		if adminAddr == "" {
+			adminAddr = ":8081"
 		}
 	}
 

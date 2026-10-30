@@ -13,7 +13,7 @@ help:
 	@echo "  fmt              - gofmt -w <tracked Go files>"
 	@echo "  fmt-check        - fail if gofmt would change files"
 	@echo "  test             - go test ./... -race"
-	@echo "  test-integration - go test -tags=integration ./... (requires Docker)"
+	@echo "  test-integration - go test -race -tags=integration ./... (requires Docker)"
 	@echo "  verify           - CI gate: fmt-check + generate + git diff --exit-code"
 	@echo "  lint-migrations  - fail if any down migrations exist (policy)"
 	@echo "  migrate-auth-smoke - CI gate: run auth migrations on fresh DB and smoke query"
@@ -52,7 +52,7 @@ test:
 	go test ./... -race
 
 test-integration:
-	go test -tags=integration ./...
+	go test -race -tags=integration ./...
 
 verify: fmt-check generate
 	git diff --exit-code
