@@ -39,6 +39,8 @@ cleanup() {
 }
 trap cleanup EXIT
 "${compose[@]}" config --quiet
+docker run --rm --entrypoint /bin/promtool -v "$root_dir/deployments/observability/prometheus:/etc/prometheus:ro" prom/prometheus:v2.55.1 check config /etc/prometheus/prometheus.yml
+docker run --rm --entrypoint /bin/promtool -v "$root_dir/deployments/observability/prometheus:/etc/prometheus:ro" -w /etc/prometheus/tests prom/prometheus:v2.55.1 test rules rules.test.yml
 "${compose[@]}" build authd hellod gatewayd
 "${compose[@]}" up -d --wait --wait-timeout 180
 endpoint() { printf 'http://%s' "$("${compose[@]}" port "$1" "$2")"; }

@@ -9,7 +9,9 @@ import (
 	hellov1 "sdk-microservices/gen/api/proto/hello/v1"
 	"sdk-microservices/internal/platform/boot"
 	"sdk-microservices/internal/platform/config"
+	"sdk-microservices/internal/platform/grpcutil"
 	"sdk-microservices/internal/platform/httpmw"
+	"sdk-microservices/internal/platform/metrics"
 	gatewaycfg "sdk-microservices/internal/services/gateway"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -30,17 +32,15 @@ func main() {
 		log := deps.Log
 		config.LogEffective(log, cfg)
 
-		helloConn, err := grpc.DialContext(ctx, cfg.Upstreams.HelloGRPCAddr,
+		helloConn, err := grpcutil.DialReady(ctx, cfg.Upstreams.HelloGRPCAddr,
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithBlock(),
 		)
 		if err != nil {
 			return boot.Main{}, err
 		}
 
-		authConn, err := grpc.DialContext(ctx, cfg.Upstreams.AuthGRPCAddr,
+		authConn, err := grpcutil.DialReady(ctx, cfg.Upstreams.AuthGRPCAddr,
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithBlock(),
 		)
 		if err != nil {
 			_ = helloConn.Close()
@@ -73,6 +73,13 @@ func main() {
 		root.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
 
 		h := gatewaycfg.BuildEdgeMiddleware(log, cfg, root)
+		httpMetrics, err := metrics.NewHTTPServerMetrics("gateway")
+		if err != nil {
+			_ = helloConn.Close()
+			_ = authConn.Close()
+			return boot.Main{}, err
+		}
+		h = httpMetrics.Middleware(h)
 
 		srv := &http.Server{
 			Addr:    cfg.HTTP.Addr,

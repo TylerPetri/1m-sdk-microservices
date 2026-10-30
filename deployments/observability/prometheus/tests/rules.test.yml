@@ -1,0 +1,31 @@
+rule_files:
+  - ../rules/recording.yml
+  - ../rules/alerts.yml
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'http_server_duration_seconds_count{job="gateway",http_method="GET",http_status_code="200"}'
+        values: '0+54x10'
+      - series: 'http_server_duration_seconds_count{job="gateway",http_method="GET",http_status_code="500"}'
+        values: '0+6x10'
+      - series: 'rpc_server_duration_seconds_count{job="auth",rpc_method="AuthService/Login",rpc_code="OK"}'
+        values: '0+54x10'
+      - series: 'rpc_server_duration_seconds_count{job="auth",rpc_method="AuthService/Login",rpc_code="Internal"}'
+        values: '0+6x10'
+    promql_expr_test:
+      - expr: 'job:http_server_requests:rate5m{job="gateway",http_method="GET",http_status_code="500"}'
+        eval_time: 6m
+        exp_samples:
+          - labels: 'job:http_server_requests:rate5m{job="gateway",http_method="GET",http_status_code="500"}'
+            value: 0.1
+      - expr: 'sum by (job) (rate(http_server_duration_seconds_count{http_status_code=~"5.."}[5m])) / sum by (job) (rate(http_server_duration_seconds_count[5m]))'
+        eval_time: 6m
+        exp_samples:
+          - labels: '{job="gateway"}'
+            value: 0.1
+      - expr: 'sum by (job) (rate(rpc_server_duration_seconds_count{rpc_code!~"OK|0"}[5m])) / sum by (job) (rate(rpc_server_duration_seconds_count[5m]))'
+        eval_time: 6m
+        exp_samples:
+          - labels: '{job="auth"}'
+            value: 0.1

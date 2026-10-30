@@ -75,6 +75,9 @@ def targets_up():
 
 
 eventually(targets_up, "all five Prometheus scrape targets healthy")
+for query in ('http_server_duration_seconds_count{job="gateway"}', 'rpc_server_duration_seconds_count{job="auth"}'):
+    eventually(lambda: bool(request("PROMETHEUS_URL", "/api/v1/query?" + urllib.parse.urlencode({"query": query}))["data"]["result"]),
+               "application metric exists: " + query)
 eventually(lambda: bool(request("PROMETHEUS_URL", "/api/v1/query?query=portfolio_smoke")["data"]["result"]),
            "OTLP metric reaches Prometheus")
 eventually(lambda: request("GRAFANA_URL", "/api/health")["database"] == "ok", "Grafana healthy")

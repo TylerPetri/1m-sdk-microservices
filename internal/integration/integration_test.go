@@ -138,7 +138,7 @@ func TestContract_gRPC_StatusCodes(t *testing.T) {
 	authAddr, stop := startAuthGRPC(t, ctx, pool)
 	defer stop()
 
-	conn, err := grpc.DialContext(ctx, authAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(authAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("dial auth err=%v", err)
 	}
@@ -282,13 +282,11 @@ func startHelloGRPC(t *testing.T, ctx context.Context) (addr string, stop func()
 func startGatewayHTTP(t *testing.T, ctx context.Context, helloAddr, authAddr string) (baseURL string, stop func()) {
 	t.Helper()
 	// gRPC dials for handlers.
-	dialCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	connHello, err := grpc.DialContext(dialCtx, helloAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	connHello, err := grpc.NewClient(helloAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("dial hello err=%v", err)
 	}
-	connAuth, err := grpc.DialContext(dialCtx, authAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	connAuth, err := grpc.NewClient(authAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		_ = connHello.Close()
 		t.Fatalf("dial auth err=%v", err)
