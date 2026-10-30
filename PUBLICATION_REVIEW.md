@@ -32,7 +32,7 @@ can miss secrets; zero findings is not proof of absence.
 | Generated descriptors reference obsolete `api/proto/...` paths | Regenerate from actual `proto/...` inputs; SQL output remains unchanged. |
 | Main push breaking check compared main to itself | CI uses PR base SHA or previous push SHA; manual target accepts `PROTO_BASE`. |
 | Migration smoke prints a false boolean but exits zero on missing table | Query actual users columns and sessions table with `ON_ERROR_STOP`. Use unique resources, no fixed host port, and cleanup only resources this run created. |
-| Compose auth starts without applying versioned migrations | Add a one-shot migration dependency before auth startup. |
+| Compose auth starts without applying versioned migrations | Add a one-shot migration dependency before auth startup. Postgres readiness uses TCP to avoid observing the temporary initialization socket server. |
 | Historical `prod` profile uses published development credentials, plaintext transport, anonymous Grafana, all-interface ports, and no APP_ENV override | Explicitly document local demo status, bind all published ports to localhost, set dev environment explicitly for auth/gateway, require a shared local JWT secret. Database credentials remain local demo defaults. Profile name retained for compatibility. |
 | Gateway accepts any nonempty Authorization header | Wire existing JWT middleware into edge chain; validate signature, issuer, expiry and subject. Reject refresh JWTs in both token validators. Add rejection/acceptance unit tests and integration coverage through real edge middleware. |
 | Hard-coded JWT and password-printing example scripts | Require a fresh token/password in environment, remove payload printing; historical JWT remains in the root commit. |
@@ -102,6 +102,13 @@ Additional verification:
   proxy redirect to storage.googleapis.com for klauspost/compress v1.18.0.
   This is not a passing build. Full Compose startup and observability smoke
   checks remain unverified.
+- An alternative Docker runtime smoke **passed**: CGO-disabled binaries compiled
+  with local Go 1.27.3 were bind-mounted into disposable distroless containers,
+  connected to fresh migrated Postgres. Registration, login, authenticated Hello,
+  and forged-header rejection passed. Internal service names were excluded from
+  the session HTTP proxy. This does not validate the Dockerfile build or Go 1.24.9
+  images. The first attempt without the internal proxy exclusions timed out;
+  the corrected run passed. All audit containers/networks were removed.
 - Remote GitHub Actions was in progress when first checked; final status is
   recorded in the PR. No green CI result is assumed.
 

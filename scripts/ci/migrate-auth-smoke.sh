@@ -28,13 +28,13 @@ created_pg=true
 
 echo "Waiting for Postgres to become ready..."
 for i in {1..60}; do
-  if docker exec "$pg_name" pg_isready -U postgres >/dev/null 2>&1; then
+  if docker exec "$pg_name" pg_isready -h 127.0.0.1 -U postgres -d auth >/dev/null 2>&1; then
     break
   fi
   sleep 1
 done
 
-docker exec "$pg_name" pg_isready -U postgres >/dev/null
+docker exec "$pg_name" pg_isready -h 127.0.0.1 -U postgres -d auth >/dev/null
 
 echo "Running auth migrations on fresh DB..."
 docker run --rm --network "$net" \
