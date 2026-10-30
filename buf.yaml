@@ -5,7 +5,10 @@ deps:
 
 lint:
   use:
-    - DEFAULT
+    - STANDARD
+  except:
+    # Keep the repository-level proto/ prefix and existing generated import paths.
+    - PACKAGE_DIRECTORY_MATCH
 
 breaking:
   use:

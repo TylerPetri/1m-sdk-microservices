@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"reflect"
-	"sdk-microservices/internal/platform/boot"
 	"sort"
 	"strconv"
 	"strings"
@@ -20,8 +19,7 @@ var (
 
 // CurrentEnv reads APP_ENV with default "dev".
 func CurrentEnv() AppEnv {
-	cfg := boot.EnvConfig{}
-	v := strings.TrimSpace(cfg.AppEnv)
+	v := strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))
 	if v == "" {
 		return EnvDev
 	}
@@ -29,7 +27,7 @@ func CurrentEnv() AppEnv {
 	case EnvDev, EnvStaging, EnvProd:
 		return AppEnv(v)
 	default:
-		// Unknown env -> treat as dev but validation should catch it if struct includes APP_ENV.
+		// Preserve unknown values so service validation rejects them.
 		return AppEnv(v)
 	}
 }
@@ -127,6 +125,9 @@ func decodeStruct(rv reflect.Value, env AppEnv) error {
 		requiredIn := parseCSVSet(sf.Tag.Get("required_in"))
 
 		need := required || requiredIn[string(env)]
+		if need && (!isSet || raw == "") {
+			return fmt.Errorf("%w: %s is required", ErrInvalidConfig, envKey)
+		}
 
 		val := raw
 		if !isSet || val == "" {

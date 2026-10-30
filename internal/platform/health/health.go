@@ -52,7 +52,7 @@ func Evaluate(ctx context.Context, n *Node) Result {
 		}
 	}
 	// If we made it here and didn't fail checks, it's healthy.
-	if res.Error == "" && res.Healthy == false && len(res.Deps) == 0 {
+	if res.Error == "" && !res.Healthy && len(res.Deps) == 0 {
 		res.Healthy = true
 	}
 	if res.Error == "" && (len(res.Deps) > 0) {

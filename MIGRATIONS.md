@@ -1,6 +1,8 @@
 # Migrations policy
 
-This repo uses **expand/contract** migrations for zero-downtime schema evolution.
+This repo follows an **expand/contract** migration policy intended to keep schema
+changes compatible with running code. Fresh-database tests do not demonstrate
+zero-downtime evolution under production load.
 
 ## Down migrations are banned
 
@@ -27,4 +29,5 @@ When you need to change schema without breaking running code:
 ## CI gate
 
 `make migrate-auth-smoke` spins up a **fresh Postgres**, runs migrations, and
-executes a basic smoke query. This catches "works locally" migration issues.
+checks the schema, repeat execution, constraints, invalid SQL, and dirty-state
+rejection. It does not automatically force or repair a failed migration.

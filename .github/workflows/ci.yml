@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -19,13 +22,26 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Install pinned generation tools
+        run: make tools
+
       - name: Verify generated + formatting
         run: |
           make fmt-check
           make lint-migrations
-          make proto-check
-          make generate
-          git diff --exit-code
+          base="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
+            base=$(git rev-list --max-parents=0 HEAD | head -1)
+            echo "New branch: comparing against root commit; no previous push baseline exists."
+          fi
+          make proto-check PROTO_BASE="$base"
+          make verify
+
+      - name: Static analysis
+        run: |
+          go vet ./...
+          staticcheck ./...
+          staticcheck -tags integration ./...
 
       - name: Unit tests
         run: make test
@@ -35,3 +51,19 @@ jobs:
 
       - name: Integration tests (Docker)
         run: make test-integration
+
+  docker-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Dockerfiles and smoke disposable Compose stack
+        run: make smoke-compose
+        env:
+          SDK_SMOKE_LOG_DIR: ${{ runner.temp }}/compose-smoke
+      - name: Save Compose diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compose-smoke-logs
+          path: ${{ runner.temp }}/compose-smoke

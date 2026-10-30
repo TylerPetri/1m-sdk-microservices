@@ -16,7 +16,7 @@ If you’re reviewing this repo:
 2. `cmd/<service>/main.go` — service boot pattern
 3. `proto/` + `buf.yaml` — API boundaries and generation
 4. `sqlc.yaml` + `migrations/` — data access contract
-5. CI workflow / `make verify` — enforced guarantees
+5. CI workflow / `make verify` — intended quality gates (see PUBLICATION_REVIEW.md for verification status)
 
 Everything else fans out from these.
 
@@ -39,11 +39,12 @@ internal/
 
 All services:
 
-- Expose a **primary gRPC API**
+- Auth and Hello expose a **primary gRPC API**; the gateway exposes HTTP
 - Optionally expose an **HTTP surface** via `grpc-gateway`
 - Expose an **admin port** for health and metrics
 
-There is no shared “god service” and no global runtime state.
+Service processes share no application runtime state; each initializes its own
+logging and telemetry providers.
 
 ---
 
@@ -100,8 +101,8 @@ Generated code is treated as a **checked-in artifact** and verified by CI to pre
 ## Configuration & secrets
 
 - Configuration is environment-based
-- No secrets are committed to the repository
-- Defaults exist for local development only
+- Local-only defaults are present; a historical demo token remains in Git history (see PUBLICATION_REVIEW.md)
+- Local database defaults exist for development only; JWT signing keys must be explicitly supplied in every environment. Staging/prod require an explicit database DSN.
 
 This mirrors typical containerized production environments.
 
@@ -121,7 +122,7 @@ The repository includes Docker Compose profiles to run:
 - Database
 - Observability stack (Prometheus / Grafana / tracing)
 
-This reflects a realistic “day-one production” setup.
+This is a local demonstration; TLS, production hardening, and operational validation remain outside the verified scope.
 
 ---
 

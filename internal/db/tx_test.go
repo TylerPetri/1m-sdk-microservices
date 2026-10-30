@@ -9,6 +9,7 @@ import (
 
 func TestWithTx_NilGuards(t *testing.T) {
 	ctx := context.Background()
+	//lint:ignore SA1012 Deliberately test the documented nil-context rejection.
 	if err := WithTx(nil, nil, pgx.TxOptions{}, func(context.Context, pgx.Tx) error { return nil }); err == nil {
 		t.Fatalf("expected error for nil ctx")
 	}

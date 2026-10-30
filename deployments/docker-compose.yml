@@ -7,17 +7,27 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_USER: postgres
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d auth"]
       interval: 3s
       timeout: 3s
       retries: 20
 
   # --- core services (prod profile)
+  migrate:
+    profiles: ["prod"]
+    image: migrate/migrate:v4.17.1
+    volumes:
+      - ../migrations/auth:/migrations:ro
+    command: ["-path", "/migrations", "-database", "postgres://postgres:postgres@postgres:5432/auth?sslmode=disable", "up"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   authd:
     profiles: ["prod"]
     build:
@@ -25,17 +35,20 @@ services:
       dockerfile: Dockerfile
       target: authd-run
     environment:
+      APP_ENV: "dev"
       AUTH_ADDR: ":50052"
       AUTH_ADMIN_ADDR: ":8081"
       AUTH_DB_DSN: "postgres://postgres:postgres@postgres:5432/auth?sslmode=disable"
-      AUTH_JWT_SECRET: "dev-secret-change-me"
+      AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?Set AUTH_JWT_SECRET in deployments/.env (see .env.example)}"
       AUTH_JWT_ISSUER: "sdk-microservices"
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     ports:
-      - "50052:50052"
-      - "8083:8081"
+      - "127.0.0.1:50052:50052"
+      - "127.0.0.1:8083:8081"
     healthcheck:
       test: ["CMD", "/grpc_health_probe", "-addr=:50052"]
       interval: 5s
@@ -55,8 +68,8 @@ services:
       HELLO_RPC_TIMEOUT: "10s"
       HELLO_MAX_INFLIGHT: "256"
     ports:
-      - "50051:50051"
-      - "8082:8081"
+      - "127.0.0.1:50051:50051"
+      - "127.0.0.1:8082:8081"
     healthcheck:
       test: ["CMD", "/grpc_health_probe", "-addr=:50051"]
       interval: 5s
@@ -71,11 +84,12 @@ services:
       dockerfile: Dockerfile
       target: gatewayd-run
     environment:
+      APP_ENV: "dev"
       GATEWAY_HTTP_ADDR: ":8080"
       GATEWAY_ADMIN_ADDR: ":8081"
       HELLO_GRPC_ADDR: "hellod:50051"
       AUTH_GRPC_ADDR: "authd:50052"
-      AUTH_JWT_SECRET: "dev-secret-change-me"
+      AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?Set AUTH_JWT_SECRET in deployments/.env (see .env.example)}"
       AUTH_JWT_ISSUER: "sdk-microservices"
     depends_on:
       hellod:
@@ -83,8 +97,8 @@ services:
       authd:
         condition: service_healthy
     ports:
-      - "8080:8080"
-      - "8081:8081"
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8081:8081"
     restart: unless-stopped
 
   # --- observability (prod profile)
@@ -100,7 +114,7 @@ services:
       - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./observability/prometheus/rules:/etc/prometheus/rules:ro
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     depends_on:
       - gatewayd
       - authd
@@ -120,7 +134,7 @@ services:
       - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       - prometheus
     restart: unless-stopped
@@ -134,13 +148,15 @@ services:
       - ./observability/loki/loki.yml:/etc/loki/loki.yml:ro
       - lokidata:/loki
     ports:
-      - "3100:3100"
+      - "127.0.0.1:3100:3100"
     restart: unless-stopped
 
   promtail:
     profiles: ["logs"]
     image: grafana/promtail:3.1.1
-    command: ["-config.file=/etc/promtail/promtail.yml"]
+    command: ["-config.file=/etc/promtail/promtail.yml", "-config.expand-env=true"]
+    environment:
+      DOCKER_LOG_PROJECT: "${COMPOSE_PROJECT_NAME:-sdk-microservices}"
     volumes:
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -157,8 +173,8 @@ services:
     volumes:
       - ./observability/otel-collector/config.yml:/etc/otelcol/config.yml:ro
     ports:
-      - "4317:4317"
-      - "4318:4318"
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
     restart: unless-stopped
 
 volumes:

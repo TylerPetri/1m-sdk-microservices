@@ -13,9 +13,9 @@ groups:
       - alert: HighHTTPErrorRate
         expr: |
           (
-            sum by (job) (rate(http_server_requests_total{http_status_code=~"5.."}[5m]))
+            sum by (job) (rate(http_server_duration_seconds_count{http_status_code=~"5.."}[5m]))
             /
-            sum by (job) (rate(http_server_requests_total[5m]))
+            sum by (job) (rate(http_server_duration_seconds_count[5m]))
           ) > 0.02
         for: 5m
         labels:
@@ -27,9 +27,9 @@ groups:
       - alert: HighGRPCErrorRate
         expr: |
           (
-            sum by (job) (rate(grpc_server_requests_total{rpc_grpc_status_code!~"OK|0"}[5m]))
+            sum by (job) (rate(rpc_server_duration_seconds_count{rpc_code!~"OK|0"}[5m]))
             /
-            sum by (job) (rate(grpc_server_requests_total[5m]))
+            sum by (job) (rate(rpc_server_duration_seconds_count[5m]))
           ) > 0.02
         for: 5m
         labels:

@@ -1,2 +1,10 @@
 .git/
-# gen/
+# Local credentials must never enter the Docker build context/cache.
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+*.log
+*.out

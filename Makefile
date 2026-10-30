@@ -1,6 +1,8 @@
 SHELL := /bin/bash
+PROTO_BASE ?= origin/main
 
-.PHONY: help tidy proto sqlc generate fmt fmt-check test test-integration verify lint-migrations migrate-auth-smoke up down logs up-prod down-prod logs-prod
+
+.PHONY: help tidy proto sqlc generate fmt fmt-check test test-integration verify lint-migrations migrate-auth-smoke up down logs up-prod down-prod logs-prod tools proto-lint proto-breaking proto-check
 
 help:
 	@echo "Targets:"
@@ -8,10 +10,10 @@ help:
 	@echo "  proto            - buf generate (protobuf/go/grpc/gateway)"
 	@echo "  sqlc             - sqlc generate"
 	@echo "  generate         - proto + sqlc"
-	@echo "  fmt              - gofmt -w ./..."
+	@echo "  fmt              - gofmt -w <tracked Go files>"
 	@echo "  fmt-check        - fail if gofmt would change files"
 	@echo "  test             - go test ./... -race"
-	@echo "  test-integration - go test -tags=integration ./... (requires Docker)"
+	@echo "  test-integration - go test -race -tags=integration ./... (requires Docker)"
 	@echo "  verify           - CI gate: fmt-check + generate + git diff --exit-code"
 	@echo "  lint-migrations  - fail if any down migrations exist (policy)"
 	@echo "  migrate-auth-smoke - CI gate: run auth migrations on fresh DB and smoke query"
@@ -26,6 +28,9 @@ help:
 	@echo "  down-prod        - docker compose --profile prod down -v"
 	@echo "  logs-prod        - docker compose --profile prod logs -f"
 
+tools:
+	bash scripts/ci/install-tools.sh
+
 tidy:
 	go mod tidy
 
@@ -38,25 +43,26 @@ sqlc:
 generate: proto sqlc
 
 fmt:
-	gofmt -w ./...
+	git ls-files -z '*.go' | xargs -0 -r gofmt -w
 
 fmt-check:
-	@test -z "$$(gofmt -l ./...)" || (echo "gofmt changes required" && gofmt -l ./... && exit 1)
+	@bash scripts/ci/fmt-check.sh
 
 test:
 	go test ./... -race
 
 test-integration:
-	go test -tags=integration ./...
+	go test -race -tags=integration ./...
 
 verify: fmt-check generate
 	git diff --exit-code
+	@test -z "$$(git ls-files --others --exclude-standard gen/api internal/db/gen)" || (echo "Untracked generated files; add regenerated output to Git" >&2; exit 1)
 
 lint-migrations:
-	./scripts/ci/lint-migrations.sh
+	bash scripts/ci/lint-migrations.sh
 
 migrate-auth-smoke:
-	./scripts/ci/migrate-auth-smoke.sh
+	bash scripts/ci/migrate-auth-smoke.sh
 
 up:
 	cd deployments && docker compose up -d
@@ -83,6 +89,10 @@ proto-lint:
 
 proto-breaking:
 	# Compare against origin/main (CI should fetch full history).
-	buf breaking --against '.git#branch=origin/main'
+	buf breaking --against '.git#ref=$(PROTO_BASE)'
 
 proto-check: proto-lint proto-breaking
+
+.PHONY: smoke-compose
+smoke-compose:
+	bash scripts/ci/compose-smoke.sh

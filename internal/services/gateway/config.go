@@ -9,6 +9,11 @@ import (
 )
 
 type Config struct {
+	JWT struct {
+		Secret string `env:"AUTH_JWT_SECRET" required:"true" redact:"true"`
+		Issuer string `env:"AUTH_JWT_ISSUER" default:"sdk-microservices"`
+	}
+
 	Platform boot.PlatformConfig `envPrefix:""`
 
 	HTTP struct {
@@ -56,6 +61,12 @@ func (c Config) Validate() error {
 	_, err := config.AuthenticateAppEnv(c.Platform.Env.AppEnv)
 	if err != nil {
 		return err
+	}
+	if strings.TrimSpace(c.JWT.Secret) == "" || strings.TrimSpace(c.JWT.Issuer) == "" {
+		return fmt.Errorf("JWT secret and issuer must not be empty")
+	}
+	if len(strings.TrimSpace(c.JWT.Secret)) < 32 {
+		return fmt.Errorf("AUTH_JWT_SECRET must be at least 32 characters in every environment")
 	}
 	if strings.TrimSpace(c.HTTP.Addr) == "" {
 		return fmt.Errorf("GATEWAY_HTTP_ADDR must not be empty")
