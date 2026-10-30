@@ -1,5 +1,9 @@
 # Publication review — 2026-10-30
 
+**Pass 1 record.** [Pass 2 findings and final verification](PASS2_REVIEW.md)
+supersede the technical blockers and pending-CI status below. Historical
+credential and owner licensing actions remain explicit in [SECURITY.md](SECURITY.md).
+
 **PUBLICATION NO-GO pending owner review of historical token exposure, ownership,
 and license language.** This is a portfolio preparation review, not a production
 security certification. No visibility change, merge, deployment, or production

@@ -7,7 +7,7 @@ shutdown, health checks, configuration, logging, metrics, and tracing hooks.
 
 This demonstrates service composition, generated API/data boundaries, and local
 operational tooling. It is experimental software, with no production reliability
-or scalability claim. See [the publication review](PUBLICATION_REVIEW.md) for
+or scalability claim. See [the Pass 2 review](PASS2_REVIEW.md) for
 verified checks and unresolved risks, and [DESIGN.md](DESIGN.md) for design intent.
 
 ## Architecture
