@@ -1,5 +1,9 @@
 # Portfolio preparation — Pass 2
 
+**Historical review record:** the later owner confirmation and final credential
+disposition in [SECURITY.md](SECURITY.md#owner-confirmation-and-residual-risk-disposition)
+supersede earlier pending-owner / historical-JWT NO-GO conclusions.
+
 Reviewed 2026-10-30 (America/Toronto), continuing PR #1 and its existing branch.
 No merge, public-history rewrite, visibility change, production access, or
 publishing/deployment operation was performed. Docker/Compose operations were

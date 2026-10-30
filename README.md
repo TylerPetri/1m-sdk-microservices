@@ -115,7 +115,8 @@ historical-key rotation actions and the trust boundary of direct gRPC access.
 
 Copyright © 2026 Tyler Petri. All rights reserved; see [LICENSE.txt](LICENSE.txt).
 Public visibility does not grant an open-source license. The existing license
-restricts use and distribution and calls the work confidential. Owner review of
-those terms and ownership is required before a publication GO; this preparation
+restricts use and distribution and calls the work confidential. The owner has
+confirmed public-display rights while retaining all rights reserved.
+Clarifying the confidentiality wording remains recommended; this preparation
 does not change licensing rights. Dependency and container obligations are
 reviewed separately in [THIRD_PARTY_REVIEW.md](THIRD_PARTY_REVIEW.md).

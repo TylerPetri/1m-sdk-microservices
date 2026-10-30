@@ -2,7 +2,8 @@
 
 Reviewed 2026-10-30 (America/Toronto), on the existing branch and PR #1.
 
-**Engineering checks: GO. Final MERGE: NO-GO pending the owner decisions below.**
+**Engineering checks: GO. Final MERGE: GO for the scoped portfolio PR.**
+The owner confirmation and residual-risk acceptance below close the prior hold.
 No additional broad hardening is proposed. No merge, deployment, visibility
 change, external credential rotation, or published-history rewrite occurred.
 
@@ -58,7 +59,7 @@ CI/CD, configuration and secret-manager records for every environment/project
 where this code or key was copied. Repository inspection cannot establish those
 external facts, and no external environment was accessed for this review.
 
-If reuse is possible or records are incomplete, the owner must treat the old key
+If non-local reuse is discovered or suspected, the owner must treat the old key
 as compromised: rotate it on all issuers and validators, stop accepting it,
 invalidate affected access/refresh tokens, require login again, and assess logs.
 [SECURITY.md](SECURITY.md) contains the full runbook. History cleanup is a separate
@@ -89,19 +90,33 @@ not override ownership of original contributions; conversely, the proprietary
 claim does not override third-party rights. Employer/client restrictions and
 contribution ownership cannot be verified from Git authorship alone.
 
-## Owner decisions before the final merge recommendation
+## Owner confirmation and final disposition
 
-1. **Credential history:** confirm isolated local-only use based on the available
-   records, or acknowledge possible reuse and complete the applicable rotation/
-   invalidation actions. No secret values are needed in a public response.
-2. **Ownership and public terms:** confirm rights to publicly display the original
-   contributions. Decide whether to clarify LICENSE.txt's contradictory
-   confidentiality/public-display wording while retaining all rights reserved.
-   Suggested clarification is in THIRD_PARTY_REVIEW.md; it is not applied.
+The owner confirmed ownership/public-display rights during Pass 3. On 2026-10-30,
+the owner also clarified that the SDK and the only potential downstream ebook
+storefront were local experiments; the storefront was discontinued and never
+went live. To the owner's knowledge there was no public SDK deployment,
+intentional production-key reuse, real customer use, or production auth session.
+This is an owner attestation, not independent historical configuration verification.
 
-These are owner facts/terms decisions, not requests for another engineering pass.
-Once closed, the engineering evidence supports MERGE GO for this scoped PR.
-Production deployment remains outside scope and is not approved.
+A fresh review of the available repository history/configuration found no
+contradictory evidence. The historical `prod` profile name and development default
+were potential deployment hazards, not proof that a deployment occurred. Current
+settings have no signing-key fallback, require explicit staging/prod database
+configuration, and identify Compose credentials/listeners as a dev-only demo.
+No production-ready deployment configuration is claimed.
+
+The owner explicitly accepts the remaining uncertainty for this portfolio.
+**MERGE GO:** no additional security or engineering blocker was identified for
+this scoped PR. Detailed evidence and the conditional rotation/invalidation
+runbook remain in [SECURITY.md](SECURITY.md). New evidence of non-local reuse
+would reopen the credential assessment. No external rotation or history rewrite
+is needed merely to remove this expired local-example finding from the record.
+
+LICENSE.txt remains all rights reserved. Clarifying “confidential” for consistency
+with public display is a recommendation, not an unresolved ownership or merge
+hold. Third-party redistribution/source obligations remain as documented.
+Production deployment and automatic merging remain unauthorized.
 
 ## Validation and exact final-head evidence
 

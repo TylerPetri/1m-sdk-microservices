@@ -17,8 +17,8 @@ token, identity, or key values in this report:
   This is evidence of a development-issued example token, not just arbitrary
   placeholder text. A JWT is not itself an HMAC signing key; however, the matching
   key was also published as a configuration default.
-- **Not established:** that the token was strictly synthetic or never used in a
-  deployed service. Signature verification establishes the matching key, not the
+- **Not independently established:** that the token was strictly synthetic or
+  never used in a deployed service. Signature verification establishes the matching key, not the
   issuance path or the absence of external reuse. That requires owner confirmation
   and historical configuration/deployment records.
 - The original reachable history has one commit. Its key references are the auth
@@ -33,7 +33,49 @@ The environment loader now reads APP_ENV and requires explicit staging/prod DB
 configuration. No public history was rewritten; the historical token and default
 remain discoverable in Git history.
 
-## Required owner actions if reuse cannot be excluded
+## Owner confirmation and residual-risk disposition
+
+On 2026-10-30 (America/Toronto), the owner clarified the earlier “unsure” answer:
+
+- The SDK was developed and tested locally and, to the owner's knowledge, was
+  never deployed to a publicly accessible server.
+- The only other application that may have used it was an experimental ebook
+  storefront. That application was local, discontinued, and never went live.
+- The development signing default was not intentionally reused in production;
+  no known real customers or production authentication sessions depended on it.
+- This is the owner's account based on project knowledge, **not independent
+  verification of every historical configuration**. The owner accepts the
+  remaining risk for the portfolio if repository evidence does not contradict it.
+
+Repository cross-check: the available main and review-branch history contained
+14 reachable commits and 205 unique blobs before recording this confirmation.
+The original one-commit project, subsequent CI/test changes, scripts and Compose
+configuration show local services and disposable test stacks. No external release/
+deployment workflow, published application image, production endpoint, or other
+positive evidence of a live deployment was found. The historical `prod` profile
+and published default remain documented warning signals; their names/configuration
+alone do not establish an actual deployment or contradict the owner's account.
+The discontinued storefront's external history/configuration was not independently
+audited in this repository review.
+
+**Disposition: low residual risk for the stated local-development portfolio;
+MERGE GO for this scoped PR.** The owner confirmation and explicit risk acceptance
+close the historical-key merge hold. This does not establish a universal absence
+of reuse, endorse reuse of a public key, or approve production deployment. No
+known production session is identified that requires revocation from the available
+evidence. If non-local reuse is discovered or suspected, follow the runbook below.
+No external credential was rotated, and public Git history was not rewritten.
+
+Current configuration separates the local demo from production-like settings:
+there is no signing-key fallback in any environment; auth/gateway require an
+explicit key of at least 32 characters; staging/prod require an explicit database
+DSN. Compose explicitly runs auth/gateway as dev, binds published ports to loopback,
+and retains clearly identified local-only Postgres credentials. Its historical
+`prod` profile name is not a production deployment configuration. No complete
+hardened production configuration is provided. Local environment files are excluded
+from Git and Docker contexts. Fresh keys must be used for any new environment.
+
+## Actions if non-local reuse is discovered or suspected
 
 1. Inventory every running or previously deployed auth issuer and gateway/token
    validator using this code, including instances with APP_ENV unset. Confirm

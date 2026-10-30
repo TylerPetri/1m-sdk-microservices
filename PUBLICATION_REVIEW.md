@@ -1,5 +1,9 @@
 # Publication review — 2026-10-30
 
+**Historical review record:** the later owner confirmation and final credential
+disposition in [SECURITY.md](SECURITY.md#owner-confirmation-and-residual-risk-disposition)
+supersede earlier pending-owner / historical-JWT NO-GO conclusions.
+
 **Pass 1 record.** [Pass 2 findings and final verification](PASS2_REVIEW.md)
 supersede the technical blockers and pending-CI status below. Historical
 credential and owner licensing actions remain explicit in [SECURITY.md](SECURITY.md).
