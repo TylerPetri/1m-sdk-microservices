@@ -81,7 +81,9 @@ working-tree scan has zero findings. History has not been rewritten.
 - Corrected Grafana's dashboard file (it incorrectly used the HTTP import
   envelope), removed empty provisioning placeholders, opened collector OTLP
   receivers on container interfaces, replaced its deprecated logging exporter,
-  and scoped Promtail discovery to the Compose project.
+  and scoped Promtail discovery to the Compose project. Optional collector scraping
+  now uses Docker DNS discovery, so disabling that profile does not create a
+  permanently down scrape target.
 - Wired the existing gateway HTTP metric middleware. Matched dashboard/recording/
   alert queries to actual emitted metric names and labels, and added synthetic
   Prometheus rule tests. Runtime smoke checks assert the HTTP/gRPC series exist.
@@ -96,7 +98,8 @@ working-tree scan has zero findings. History has not been rewritten.
 
 Verification code commit:
 `df0033839e51285a3625e905f94f632ba931620f`.
-Subsequent report-only changes do not modify the implementation.
+A subsequent optional-collector discovery correction avoids a false down target
+when the OTLP profile is disabled; the final head run is recorded in the PR.
 
 | Check | Result / scope |
 | --- | --- |
