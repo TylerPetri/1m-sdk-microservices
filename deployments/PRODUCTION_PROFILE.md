@@ -1,4 +1,8 @@
-# Production profile (local)
+# Local full-stack demo (historical `prod` profile)
+
+This profile is experimental local infrastructure, not a production deployment.
+All published ports bind to 127.0.0.1. Postgres uses development credentials and
+Grafana permits anonymous viewing; never expose this stack externally.
 
 This is a Docker Compose profile that runs:
 
@@ -16,6 +20,8 @@ This is a Docker Compose profile that runs:
 From repo root:
 
 ```bash
+cp deployments/.env.example deployments/.env
+printf 'AUTH_JWT_SECRET=%s\n' "$(openssl rand -hex 32)" > deployments/.env
 make up-prod
 ```
 
@@ -48,3 +54,7 @@ Prometheus loads:
 - `deployments/observability/prometheus/rules/alerts.yml` (basic SLO + saturation alerts)
 
 These are intentionally minimal and safe to evolve.
+
+Auth waits for the one-shot migration service to complete. `make down-prod` removes
+local volumes and all their data. Existing database volumes retain their initial
+credentials; changing environment variables does not rotate existing users.

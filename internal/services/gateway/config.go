@@ -9,6 +9,11 @@ import (
 )
 
 type Config struct {
+	JWT struct {
+		Secret string `env:"AUTH_JWT_SECRET" default:"dev-secret-change-me" required_in:"staging,prod" redact:"true"`
+		Issuer string `env:"AUTH_JWT_ISSUER" default:"sdk-microservices"`
+	}
+
 	Platform boot.PlatformConfig `envPrefix:""`
 
 	HTTP struct {
@@ -53,9 +58,15 @@ type PolicyConfig struct {
 }
 
 func (c Config) Validate() error {
-	_, err := config.AuthenticateAppEnv(c.Platform.Env.AppEnv)
+	appEnv, err := config.AuthenticateAppEnv(c.Platform.Env.AppEnv)
 	if err != nil {
 		return err
+	}
+	if strings.TrimSpace(c.JWT.Secret) == "" || strings.TrimSpace(c.JWT.Issuer) == "" {
+		return fmt.Errorf("JWT secret and issuer must not be empty")
+	}
+	if (string(appEnv) == "prod" || string(appEnv) == "staging") && (len(c.JWT.Secret) < 32 || c.JWT.Secret == "dev-secret-change-me") {
+		return fmt.Errorf("AUTH_JWT_SECRET must be a non-default value of at least 32 characters in staging/prod")
 	}
 	if strings.TrimSpace(c.HTTP.Addr) == "" {
 		return fmt.Errorf("GATEWAY_HTTP_ADDR must not be empty")

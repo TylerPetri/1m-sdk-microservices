@@ -3,8 +3,9 @@ package gateway
 import (
 	"net/http"
 
-	"sdk-microservices/internal/platform/authctx"
+	"sdk-microservices/internal/platform/authjwt"
 	"sdk-microservices/internal/platform/httpmw"
+	"strings"
 
 	"go.uber.org/zap"
 	"golang.org/x/time/rate"
@@ -17,6 +18,15 @@ func BuildEdgeMiddleware(log *zap.Logger, cfg Config, root http.Handler) http.Ha
 	if log == nil {
 		log = zap.NewNop()
 	}
+
+	protected := httpmw.AuthBearer(authjwt.New([]byte(cfg.JWT.Secret), cfg.JWT.Issuer, 0), root)
+	authenticated := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/v1/auth/") || r.URL.Path == "/healthz" || r.URL.Path == "/readyz" {
+			root.ServeHTTP(w, r)
+			return
+		}
+		protected.ServeHTTP(w, r)
+	})
 
 	// Order (outer -> inner):
 	// - RequestID: ensure correlation for all other middleware + downstream
@@ -34,7 +44,7 @@ func BuildEdgeMiddleware(log *zap.Logger, cfg Config, root http.Handler) http.Ha
 						httpmw.RateLimit(
 							rate.Limit(cfg.Policy.RateLimitRPS),
 							cfg.Policy.RateLimitBurst,
-							authctx.GatewayAuth("/v1/auth/", root),
+							authenticated,
 						),
 					),
 				),

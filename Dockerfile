@@ -3,12 +3,16 @@
 FROM golang:1.24.9 AS base
 WORKDIR /src
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=secret,id=proxy_ca \
+    if [ -f /run/secrets/proxy_ca ]; then export SSL_CERT_FILE=/run/secrets/proxy_ca; fi; \
+    go mod download
 COPY . .
 
 # ---- build probe once
 FROM golang:1.24.9 AS probes
-RUN GOBIN=/out go install github.com/grpc-ecosystem/grpc-health-probe@latest
+RUN --mount=type=secret,id=proxy_ca \
+    if [ -f /run/secrets/proxy_ca ]; then export SSL_CERT_FILE=/run/secrets/proxy_ca; fi; \
+    CGO_ENABLED=0 GOBIN=/out go install github.com/grpc-ecosystem/grpc-health-probe@v0.4.38
 
 # ---- gateway
 FROM base AS gateway

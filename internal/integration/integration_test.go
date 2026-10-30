@@ -19,9 +19,10 @@ import (
 	authv1 "sdk-microservices/gen/api/proto/auth/v1"
 	hellov1 "sdk-microservices/gen/api/proto/hello/v1"
 	"sdk-microservices/internal/db"
-	authsrv "sdk-microservices/internal/services/auth/server"
 	"sdk-microservices/internal/services/auth/jwt"
+	authsrv "sdk-microservices/internal/services/auth/server"
 	"sdk-microservices/internal/services/auth/store"
+	gatewaycfg "sdk-microservices/internal/services/gateway"
 	hellosrv "sdk-microservices/internal/services/hello/server"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -78,6 +79,13 @@ func TestIntegration_gRPC_and_HTTP_Smoke(t *testing.T) {
 	// Start gateway HTTP.
 	gatewayURL, gwStop := startGatewayHTTP(t, ctx, helloAddr, authAddr)
 	defer gwStop()
+
+	// The real edge middleware must reject arbitrary authorization headers.
+	respDenied := mustHTTP(t, ctx, "GET", gatewayURL+"/v1/hello/test", nil, map[string]string{"Authorization": "anything"})
+	_ = respDenied.Body.Close()
+	if respDenied.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("forged header status=%d", respDenied.StatusCode)
+	}
 
 	// Register via HTTP.
 	email := fmt.Sprintf("u_%d@example.com", time.Now().UnixNano())
@@ -298,7 +306,14 @@ func startGatewayHTTP(t *testing.T, ctx context.Context, helloAddr, authAddr str
 		t.Fatalf("register auth gw err=%v", err)
 	}
 
-	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 2 * time.Second}
+	var cfg gatewaycfg.Config
+	cfg.JWT.Secret = "test-secret"
+	cfg.JWT.Issuer = "sdk-microservices"
+	cfg.Policy.Timeout = 10 * time.Second
+	cfg.Policy.MaxInFlight = 100
+	cfg.Policy.RateLimitRPS = 1000
+	cfg.Policy.RateLimitBurst = 100
+	srv := &http.Server{Handler: gatewaycfg.BuildEdgeMiddleware(zap.NewNop(), cfg, mux), ReadHeaderTimeout: 2 * time.Second}
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		_ = connHello.Close()

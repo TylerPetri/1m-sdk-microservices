@@ -80,7 +80,7 @@ func (s *Service) Parse(token string) (*Claims, error) {
 			return nil, ErrInvalidToken
 		}
 		return s.secret, nil
-	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Name}))
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Name}), jwt.WithExpirationRequired())
 	if err != nil {
 		return nil, ErrInvalidToken
 	}
@@ -89,7 +89,7 @@ func (s *Service) Parse(token string) (*Claims, error) {
 	if !ok || !parsed.Valid {
 		return nil, ErrInvalidToken
 	}
-	if claims.Issuer != s.issuer {
+	if claims.Issuer != s.issuer || claims.Subject == "" || claims.ID == "refresh" {
 		return nil, ErrInvalidToken
 	}
 	return claims, nil

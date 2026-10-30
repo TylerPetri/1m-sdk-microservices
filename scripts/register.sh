@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BASE_URL="http://localhost:8080"
-EMAIL="tyler@example.com"
-PASSWORD="supersecurepassword"
+BASE_URL="${BASE_URL:-http://localhost:8080}"
+EMAIL="${EMAIL:-reviewer@example.com}"
+: "${PASSWORD:?Set PASSWORD (at least 12 characters)}"
 
 request() {
   local method="$1"; shift
@@ -12,9 +12,6 @@ request() {
 
   echo
   echo ">>> $method $url"
-  if [ -n "$data" ]; then
-    echo ">>> payload: $data"
-  fi
 
   if [ -n "$data" ]; then
     curl -sS -i --show-error \

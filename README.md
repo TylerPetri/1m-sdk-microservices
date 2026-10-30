@@ -1,42 +1,111 @@
-# sdk-microservices (Go)
+# Go microservices engineering portfolio
 
-A production-style Go microservices starter: gRPC services behind an HTTP gateway (grpc-gateway), Postgres-backed auth, and a shared “platform” layer for boot/health/metrics/logging/OTel.
+A Go service architecture experiment: an HTTP gateway translates Protobuf APIs to
+gRPC, an authentication service stores users in Postgres, and a Hello service
+provides a small authenticated endpoint. Shared platform code covers startup,
+shutdown, health checks, configuration, logging, metrics, and tracing hooks.
 
-> This repository represents an evolving production-grade system and is not intended as a reusable template.
+This demonstrates service composition, generated API/data boundaries, and local
+operational tooling. It is experimental software, with no production reliability
+or scalability claim. See [the publication review](PUBLICATION_REVIEW.md) for
+verified checks and unresolved risks, and [DESIGN.md](DESIGN.md) for design intent.
 
-## Why this repo exists
+## Architecture
 
-This is a **clean, team-ready** baseline that demonstrates how I build services that scale operationally:
-- **Consistent service boot pattern** (logging, config, shutdown, health/readiness, admin server)
-- **API-first boundaries** with **Protobuf + Buf** and generated gRPC + HTTP (grpc-gateway)
-- **Typed data access** with **pgxpool + sqlc**
-- **Operational maturity**: `/livez`, `/readyz`, `/metrics`, tracing hooks, and Docker Compose for local prod-like runs
-- **Deterministic generation + CI gates** (no “it works on my machine” drift)
-
-## Architecture (at a glance)
-
-- **gatewayd** (HTTP) → routes `/v1/*` → calls gRPC services
-- **authd** (gRPC) → register/login/validate backed by Postgres
-- **hellod** (gRPC) → simple example service
-- **admin ports** per service expose health + metrics
-
-## Quick run (local)
-
-Prereqs: Go + Docker
-
-```bash
-make generate   # buf + sqlc
-make test       # unit tests (race)
-make up-prod    # starts postgres + services + observability stack (profile-based)
+```mermaid
+flowchart LR
+    Client -->|HTTP JSON :8080| Gateway[gatewayd]
+    Gateway -->|gRPC :50052| Auth[authd]
+    Gateway -->|gRPC :50051| Hello[hellod]
+    Auth -->|pgx / sqlc| DB[(Postgres auth)]
+    Migrate[One-shot versioned migrations] --> DB
+    Prometheus -->|admin /metrics| Gateway
+    Prometheus -->|admin /metrics| Auth
+    Prometheus -->|admin /metrics| Hello
+    Grafana --> Prometheus
 ```
 
----
+The gateway validates access JWTs on protected routes. `/v1/auth/*` and health
+routes are public. Internal gRPC transport is plaintext in this local setup.
+Admin listeners expose `/livez`, `/readyz`, and `/metrics` separately from APIs.
+
+## Local quickstart
+
+Requires Docker Engine with Compose v2, Go matching `go.mod` or newer, Bash,
+Make, curl, jq, and openssl. Checked-in generated code supports builds without
+installing generators.
+
+```bash
+cp deployments/.env.example deployments/.env
+# Write a new local signing secret (never commit deployments/.env):
+printf 'AUTH_JWT_SECRET=%s\n' "$(openssl rand -hex 32)" > deployments/.env
+make test
+make up-prod
+```
+
+`prod` is a historical Compose profile name for a **local demo**, not a production
+environment. It starts Postgres, applies migrations before auth starts, builds all
+three services, and starts Prometheus/Grafana. Ports bind to localhost. Postgres
+uses published development credentials; Grafana permits anonymous viewing.
+Do not expose this stack to a network or reuse these credentials elsewhere.
+
+```bash
+curl --fail http://localhost:8081/readyz
+export EMAIL=reviewer@example.com PASSWORD=local-demo-password
+bash scripts/register.sh
+bash scripts/login.sh
+# Copy accessToken from the login response:
+export ACCESS_TOKEN='<fresh accessToken>'
+bash scripts/validate.sh
+curl --fail -H "Authorization: Bearer $ACCESS_TOKEN" http://localhost:8080/v1/hello/reviewer
+```
+
+Gateway: http://localhost:8080; Prometheus: http://localhost:9090;
+Grafana: http://localhost:3000. `make logs-prod` follows logs.
+`make down-prod` **deletes local database and observability volumes**.
+For database-only development use `make up`; it initializes the database but does
+not apply migrations. See [local profile details](deployments/PRODUCTION_PROFILE.md)
+and [migration policy](MIGRATIONS.md).
+
+## Generation and verification
+
+```bash
+export PATH="$(go env GOPATH)/bin:$PATH"
+make tools                 # pinned Buf, sqlc, and protoc plugins; needs network
+make fmt-check
+make lint-migrations
+make proto-check           # compares with fetched origin/main
+make generate              # regenerate Protobuf and SQL query code
+make verify                # formatting + generation + tracked diff check
+make test                  # unit tests with race detector
+make test-integration      # disposable Postgres via testcontainers; needs Docker
+make migrate-auth-smoke    # real migrate CLI on a fresh database; needs Docker
+```
+
+`make fmt` formats tracked Go files. New Go files must be added to Git first.
+CI installs pinned generators and compares Protobuf against the PR base SHA
+(or the previous push SHA), rather than comparing a main-branch push to itself.
+For manual checks use `make proto-breaking PROTO_BASE=<commit>`.
+Generation requires access to the locked Google APIs dependency on buf.build.
+
+## Limitations
+
+- Authentication is a demonstration: refresh tokens are issued, but refresh,
+  rotation, logout, and revocation endpoints are not implemented. Refresh tokens
+  are rejected where access tokens are expected.
+- Integration tests construct their own HTTP/gRPC servers and do not exercise
+  the entire command startup/middleware stack; gateway unit tests cover token
+  rejection separately. Compose smoke checks remain necessary.
+- No TLS termination, service identity, production secret manager, deployment
+  automation, backup/restore validation, load testing, or production SLO evidence.
+- Observability profiles, dashboards, alerts, and OTel configuration are examples;
+  they require separate validation and tuning. Logs profile mounts the Docker
+  socket and container logs. Empty dashboard placeholders are not dashboards.
 
 ## License
 
-© 2026 Tyler Petri. All rights reserved.
-
-This repository and its contents are proprietary and confidential.  
-No permission is granted to use, copy, modify, merge, publish, distribute, sublicense, or sell any part of this software without explicit written permission from the author.
-
-This project is shared publicly for evaluation, discussion, and demonstration purposes only.
+Copyright © 2026 Tyler Petri. All rights reserved; see [LICENSE.txt](LICENSE.txt).
+Public visibility does not grant an open-source license. The existing license
+restricts use and distribution and calls the work confidential. Owner review of
+those terms and ownership is required before a publication GO; this preparation
+does not change licensing rights.

@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -19,11 +22,19 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Install pinned generation tools
+        run: make tools
+
       - name: Verify generated + formatting
         run: |
           make fmt-check
           make lint-migrations
-          make proto-check
+          base="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
+            base=$(git rev-list --max-parents=0 HEAD | head -1)
+            echo "New branch: comparing against root commit; no previous push baseline exists."
+          fi
+          make proto-check PROTO_BASE="$base"
           make generate
           git diff --exit-code
 
