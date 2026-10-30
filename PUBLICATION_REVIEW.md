@@ -58,7 +58,10 @@ the work as proprietary/confidential. These terms were preserved, not replaced
 with an open-source license. Public engineering evaluation does not imply an
 open-source grant. The owner must confirm ownership of all contributions and
 resolve the confidentiality/public-display wording before publication GO.
-Third-party Go dependencies and generated code retain their upstream notices;
+A [Go dependency license inventory](DEPENDENCY_LICENSES.md) covers 141 selected
+modules; 54 need manual classification or have no cached root notice. Automated
+text matching does not determine legal compatibility. Third-party Go dependencies
+and generated code retain their upstream notices;
 this review does not relicense them. A complete transitive dependency/container
 license and vulnerability assessment remains outstanding. `go mod verify` checks
 cache integrity, not license compliance or vulnerability status.
@@ -85,8 +88,22 @@ Passed locally:
   actual users/sessions queries, and disposable-resource cleanup.
 - Gitleaks history scan identified the historical JWT; working-tree scan clean.
 
-Clean-checkout generation, formatter failure checks, Docker image build/startup,
-and remote Actions results are recorded below when completed. No pre-existing
+Additional verification:
+
+- A fresh local clone of the committed branch passed `make verify`, Buf lint and
+  breaking checks against the original main SHA, and migration policy lint;
+  generation left the clone clean.
+- Negative formatter checks rejected an unformatted tracked file and propagated
+  a formatter process failure instead of masking it.
+- Full Docker image builds were attempted with the session CA mounted as a
+  BuildKit secret. The build was **blocked** by network policy denying the Go
+  proxy redirect to storage.googleapis.com for klauspost/compress v1.18.0.
+  This is not a passing build. Full Compose startup and observability smoke
+  checks remain unverified.
+- Remote GitHub Actions was in progress when first checked; final status is
+  recorded in the PR. No green CI result is assumed.
+
+ No pre-existing
 setup logs are counted as tests of these changes. Sandbox restrictions initially
 blocked network/Docker; authorized local execution succeeded. The workspace's
 SQL bind mounts initially had unreadable directory permissions; local permissions
