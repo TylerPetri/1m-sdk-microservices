@@ -93,6 +93,8 @@ Additional verification:
 - A fresh local clone of the committed branch passed `make verify`, Buf lint and
   breaking checks against the original main SHA, and migration policy lint;
   generation left the clone clean.
+- A negative Buf check rejected removal of HelloResponse field 1.
+- Generation verification also rejects untracked generated output.
 - Negative formatter checks rejected an unformatted tracked file and propagated
   a formatter process failure instead of masking it.
 - Full Docker image builds were attempted with the session CA mounted as a

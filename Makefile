@@ -55,6 +55,7 @@ test-integration:
 
 verify: fmt-check generate
 	git diff --exit-code
+	@test -z "$$(git ls-files --others --exclude-standard gen/api internal/db/gen)" || (echo "Untracked generated files; add regenerated output to Git" >&2; exit 1)
 
 lint-migrations:
 	bash scripts/ci/lint-migrations.sh

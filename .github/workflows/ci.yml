@@ -35,8 +35,7 @@ jobs:
             echo "New branch: comparing against root commit; no previous push baseline exists."
           fi
           make proto-check PROTO_BASE="$base"
-          make generate
-          git diff --exit-code
+          make verify
 
       - name: Unit tests
         run: make test
