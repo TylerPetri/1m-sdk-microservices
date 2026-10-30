@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: "SDK Microservices"
+    orgId: 1
+    folder: "SDK Microservices"
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards
