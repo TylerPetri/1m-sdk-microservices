@@ -11,7 +11,8 @@ import (
 // It only applies a deadline if the request context does not already have one.
 // This means upstream callers (reverse proxies, gateways, etc.) can override it.
 //
-// If the deadline is exceeded, a 504 is returned.
+// When this wrapper enforces its deadline, net/http.TimeoutHandler returns 503.
+// A downstream gRPC deadline may instead reach the gateway first and map to 504.
 func Timeout(d time.Duration, next http.Handler) http.Handler {
 	if d <= 0 {
 		return next

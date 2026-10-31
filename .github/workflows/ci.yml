@@ -57,8 +57,8 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-      - name: Build Dockerfiles and smoke disposable Compose stack
-        run: make smoke-compose
+      - name: Build Dockerfiles and demonstrate a disposable service outage
+        run: make demo-failure
         env:
           SDK_SMOKE_LOG_DIR: ${{ runner.temp }}/compose-smoke
       - name: Save Compose diagnostics

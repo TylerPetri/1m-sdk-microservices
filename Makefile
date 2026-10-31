@@ -96,3 +96,7 @@ proto-check: proto-lint proto-breaking
 .PHONY: smoke-compose
 smoke-compose:
 	bash scripts/ci/compose-smoke.sh
+
+.PHONY: demo-failure
+demo-failure:
+	SDK_FAILURE_DEMO=1 bash scripts/ci/compose-smoke.sh

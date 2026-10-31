@@ -84,6 +84,7 @@ make test                  # unit tests with race detector
 make test-integration      # disposable Postgres via testcontainers + race detector
 make migrate-auth-smoke    # real migrate CLI + negative SQL/dirty-state tests
 make smoke-compose         # actual Dockerfile builds + disposable full stack; needs Docker
+make demo-failure          # pause Hello, observe bounded failure/metrics, recover
 ```
 
 `make fmt` formats tracked Go files. New Go files must be added to Git first.
@@ -91,6 +92,9 @@ CI installs pinned generators and compares Protobuf against the PR base SHA
 (or the previous push SHA), rather than comparing a main-branch push to itself.
 For manual checks use `make proto-breaking PROTO_BASE=<commit>`.
 Generation requires access to the locked Google APIs dependency on buf.build.
+
+For one reproducible operational example, see [the local Hello outage demo](FAILURE_DEMO.md).
+It records expected versus actual behavior and recovery, including readiness limits.
 
 ## Limitations
 
