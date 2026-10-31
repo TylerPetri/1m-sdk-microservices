@@ -166,3 +166,24 @@ These are added only when justified by real requirements.
 - Hidden magic
 - Framework lock-in
 - Implicit runtime behavior
+
+
+## Three decisions worth reviewing
+
+1. **Generate the HTTP/gRPC boundary from one Protobuf contract.** Auth and Hello
+   retain their service interfaces while grpc-gateway handles JSON translation.
+   Buf and checked-in generation expose API drift. The cost is a pinned generator
+   toolchain and explicit attention to status/deadline behavior across transports.
+2. **Compose shared runtime policy in thin command entry points.** Configuration,
+   logging, health, limits and shutdown use common platform pieces. That reduces
+   wiring drift, but a shared policy bug affects every caller. Readiness is only
+   as meaningful as its registered checks; it is not automatic dependency health.
+3. **Keep typed data access separate from schema evolution.** sqlc/pgx make the
+   queries explicit while a one-shot migration service orders database setup.
+   Fresh-database and negative migration checks demonstrate the contract; they do
+   not establish zero-downtime migrations, production backups or operational scale.
+
+[The controlled failure demonstration](FAILURE_DEMO.md) makes the boundary and
+runtime trade-offs observable: stop Hello, keep auth usable, inspect a 503 metric,
+and recover without restarting the gateway. It also documents what the current
+readiness, cancellation and shutdown behavior does not guarantee.
