@@ -18,23 +18,26 @@ import (
 // Test-only implementation of the existing API, not a deployed fault endpoint.
 type waitingHello struct {
 	hellov1.UnimplementedHelloServiceServer
+	entered  chan struct{}
 	observed chan error
 }
 
 func (s *waitingHello) Hello(ctx context.Context, _ *hellov1.HelloRequest) (*hellov1.HelloResponse, error) {
+	close(s.entered)
 	<-ctx.Done()
 	s.observed <- ctx.Err()
 	return nil, ctx.Err()
 }
 
-func TestRPCDeadlineMapsToHTTP504(t *testing.T) {
+func waitingGateway(t *testing.T, timeout time.Duration) (*httptest.Server, <-chan struct{}, <-chan error) {
+	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	observed := make(chan error, 1)
-	server := grpc.NewServer(grpc.ChainUnaryInterceptor(UnaryTimeout(20 * time.Millisecond)))
-	hellov1.RegisterHelloServiceServer(server, &waitingHello{observed: observed})
+	service := &waitingHello{entered: make(chan struct{}), observed: make(chan error, 1)}
+	server := grpc.NewServer(grpc.ChainUnaryInterceptor(UnaryTimeout(timeout)))
+	hellov1.RegisterHelloServiceServer(server, service)
 	go func() { _ = server.Serve(listener) }()
 	t.Cleanup(server.Stop)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -43,18 +46,20 @@ func TestRPCDeadlineMapsToHTTP504(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	t.Cleanup(func() { _ = conn.Close() })
 	mux := runtime.NewServeMux()
-	if err := hellov1.RegisterHelloServiceHandlerClient(ctx, mux, hellov1.NewHelloServiceClient(conn)); err != nil {
+	if err := hellov1.RegisterHelloServiceHandlerClient(context.Background(), mux, hellov1.NewHelloServiceClient(conn)); err != nil {
 		t.Fatal(err)
 	}
 	gateway := httptest.NewServer(mux)
-	defer gateway.Close()
-	request, err := http.NewRequestWithContext(ctx, "GET", gateway.URL+"/v1/hello/deadline", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	response, err := gateway.Client().Do(request)
+	gateway.Client().Timeout = 5 * time.Second
+	t.Cleanup(gateway.Close)
+	return gateway, service.entered, service.observed
+}
+
+func TestRPCDeadlineMapsToHTTP504(t *testing.T) {
+	gateway, _, observed := waitingGateway(t, 20*time.Millisecond)
+	response, err := gateway.Client().Get(gateway.URL + "/v1/hello/deadline")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +72,47 @@ func TestRPCDeadlineMapsToHTTP504(t *testing.T) {
 		if !errors.Is(cause, context.DeadlineExceeded) {
 			t.Fatalf("server cause=%v", cause)
 		}
-	case <-ctx.Done():
+	case <-time.After(5 * time.Second):
 		t.Fatal("RPC context deadline was not observed")
+	}
+}
+
+func TestHTTPClientCancellationReachesRPC(t *testing.T) {
+	gateway, entered, observed := waitingGateway(t, 0)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, "GET", gateway.URL+"/v1/hello/cancel", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	finished := make(chan error, 1)
+	go func() {
+		response, err := gateway.Client().Do(request)
+		if response != nil {
+			_ = response.Body.Close()
+		}
+		finished <- err
+	}()
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("RPC handler did not start")
+	}
+	cancel()
+	select {
+	case err := <-finished:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("client cause=%v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("HTTP caller did not return")
+	}
+	select {
+	case cause := <-observed:
+		if !errors.Is(cause, context.Canceled) {
+			t.Fatalf("RPC cause=%v", cause)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("caller cancellation did not reach RPC handler")
 	}
 }

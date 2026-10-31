@@ -84,7 +84,7 @@ make test                  # unit tests with race detector
 make test-integration      # disposable Postgres via testcontainers + race detector
 make migrate-auth-smoke    # real migrate CLI + negative SQL/dirty-state tests
 make smoke-compose         # actual Dockerfile builds + disposable full stack; needs Docker
-make demo-failure          # stop Hello, observe failure/isolation/metrics, recover
+make demo-failure          # pause Hello, observe bounded failure/metrics, recover
 ```
 
 `make fmt` formats tracked Go files. New Go files must be added to Git first.

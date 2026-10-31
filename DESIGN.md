@@ -184,6 +184,6 @@ These are added only when justified by real requirements.
    not establish zero-downtime migrations, production backups or operational scale.
 
 [The controlled failure demonstration](FAILURE_DEMO.md) makes the boundary and
-runtime trade-offs observable: stop Hello, keep auth usable, inspect a 503 metric,
+runtime trade-offs observable: pause Hello, keep auth usable, inspect a 504 metric,
 and recover without restarting the gateway. It also documents what the current
 readiness, cancellation and shutdown behavior does not guarantee.

@@ -14,10 +14,12 @@ import urllib.request
 client = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
-def request(base, path, body=None, token=None, method=None):
+def request(base, path, body=None, token=None, method=None, grpc_timeout=None):
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = token
+    if grpc_timeout:
+        headers["Grpc-Timeout"] = grpc_timeout
     req = urllib.request.Request(
         os.environ[base] + path,
         data=json.dumps(body).encode() if body is not None else None,
@@ -108,7 +110,7 @@ if os.environ.get("SDK_FAILURE_DEMO") == "1":
     def probe():
         start = time.monotonic()
         try:
-            body = request("GATEWAY_URL", "/v1/hello/reviewer", token="Bearer " + access)
+            body = request("GATEWAY_URL", "/v1/hello/reviewer", token="Bearer " + access, grpc_timeout="500m")
             return 200, body, time.monotonic() - start
         except urllib.error.HTTPError as error:
             return error.code, json.load(error), time.monotonic() - start
@@ -117,18 +119,17 @@ if os.environ.get("SDK_FAILURE_DEMO") == "1":
     gateway_restarts = subprocess.check_output(["docker", "inspect", "--format", "{{.RestartCount}}", gateway_id], text=True).strip()
     status, _, elapsed = probe()
     assert status == 200
-    record("baseline", expected_http=200, actual_http=status)
+    record("baseline", expected_http=200, actual_http=status, rpc_deadline_ms=500)
     try:
-        subprocess.run(compose + ["stop", "-t", "15", "hellod"], check=True)
-        record("trigger", action="stop hellod", scope="disposable Compose project")
+        subprocess.run(compose + ["pause", "hellod"], check=True)
         hello_id = subprocess.check_output(compose + ["ps", "-a", "-q", "hellod"], text=True).strip()
-        exit_code = int(subprocess.check_output(["docker", "inspect", "--format", "{{.State.ExitCode}}", hello_id], text=True))
-        shutdown_logs = subprocess.check_output(compose + ["logs", "--no-color", "hellod"], text=True)
-        assert exit_code == 0 and "shutdown signal" in shutdown_logs
-        record("idle_shutdown", expected_exit=0, actual_exit=exit_code, signal_log_seen=True)
+        paused = subprocess.check_output(["docker", "inspect", "--format", "{{.State.Paused}}", hello_id], text=True).strip()
+        assert paused == "true"
+        record("trigger", action="pause hellod", paused=True, scope="disposable Compose project")
         status, body, elapsed = probe()
-        assert status == 503 and body["code"] == 14, "expected gRPC Unavailable mapped to HTTP 503"
-        record("failure", expected_http=503, actual_http=status, grpc_code=body["code"], elapsed_seconds=round(elapsed, 3))
+        assert status == 504 and body["code"] == 4, "expected RPC deadline mapped to HTTP 504"
+        assert elapsed < 2, "500 ms RPC deadline exceeded the demo observation bound"
+        record("failure", expected_http=504, actual_http=status, grpc_code=body["code"], rpc_deadline_ms=500, elapsed_seconds=round(elapsed, 3))
         # This route needs authd/Postgres, but not Hello.
         still_logged_in = request("GATEWAY_URL", "/v1/auth/login", credentials)
         assert still_logged_in["userId"] == login["userId"]
@@ -137,7 +138,7 @@ if os.environ.get("SDK_FAILURE_DEMO") == "1":
         assert ready is not None
         record("readiness_limit", expected_http=200, actual_http=200,
                explanation="platform readiness does not check Hello connectivity")
-        query = 'sum(http_server_duration_seconds_count{job="gateway",http_status_code="503"})'
+        query = 'sum(http_server_duration_seconds_count{job="gateway",http_status_code="504"})'
         metric_value = []
 
         def failure_metric():
@@ -147,12 +148,12 @@ if os.environ.get("SDK_FAILURE_DEMO") == "1":
                 return True
             return False
 
-        eventually(failure_metric, "injected HTTP 503 appears in gateway metrics")
-        record("metric", series="http_server_duration_seconds_count", http_status_code="503", observed_count=metric_value[0])
+        eventually(failure_metric, "injected HTTP 504 appears in gateway metrics")
+        record("metric", series="http_server_duration_seconds_count", http_status_code="504", observed_count=metric_value[0])
     finally:
-        # Restore the service even if an assertion fails; the shell trap then
+        # Unfreeze the service even if an assertion fails; the shell trap then
         # captures logs and removes the entire disposable stack.
-        subprocess.run(compose + ["start", "hellod"], check=True)
+        subprocess.run(compose + ["unpause", "hellod"], check=True)
 
     def recovered():
         status, body, _ = probe()
@@ -161,7 +162,7 @@ if os.environ.get("SDK_FAILURE_DEMO") == "1":
     eventually(recovered, "Hello recovers through the existing gateway connection", timeout=90)
     assert subprocess.check_output(compose + ["ps", "-q", "gatewayd"], text=True).strip() == gateway_id
     assert subprocess.check_output(["docker", "inspect", "--format", "{{.RestartCount}}", gateway_id], text=True).strip() == gateway_restarts
-    record("recovery", action="start hellod", expected_http=200, actual_http=200,
+    record("recovery", action="unpause hellod", expected_http=200, actual_http=200,
            gateway_restarted=False)
     path = pathlib.Path(os.environ["SDK_SMOKE_LOG_DIR"]) / "failure-demo.json"
     path.write_text(json.dumps(evidence, indent=2) + "\n")
