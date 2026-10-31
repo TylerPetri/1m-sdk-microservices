@@ -54,4 +54,5 @@ PROMETHEUS_URL=$(endpoint prometheus 9090)
 GRAFANA_URL=$(endpoint grafana 3000)
 LOKI_URL=$(endpoint loki 3100)
 OTEL_URL=$(endpoint otel-collector 4318)
-python3 scripts/ci/compose-smoke.py
+export SDK_SMOKE_LOG_DIR="$log_dir"
+python3 scripts/ci/compose-smoke.py "${compose[@]}"
